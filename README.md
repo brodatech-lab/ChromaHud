@@ -3,10 +3,26 @@
 Lightweight, click-through performance overlay for Windows games with a comic-book look.
 Built with Tauri v2 (Rust) + React + Vite + TypeScript + Tailwind CSS v4.
 
+<p align="center">
+  <img src="docs/screenshots/overlay-hero.png" width="320" alt="ChromaHUD overlay: splash FPS, CPU with per-core clocks and CCD temperature, NVIDIA GPU with VRAM clock, fan and power limit, RAM, disk and latency">
+</p>
+
 > **This project is vibecoded.** It was built almost entirely through conversation with an AI coding
 > assistant (Cursor agent): the human described what they wanted, tested it on real hardware and gave
 > feedback; the AI wrote the code. Expect rough edges, treat hardware-level parts (driver access,
 > sensor decoding) with care, and review before reusing anything in production.
+
+## Hardware support
+
+| Hardware | Support |
+| --- | --- |
+| NVIDIA GPU | Full: usage, clocks, temperature, power, VRAM, fan, P-state, power limit, throttle reason (NVML) |
+| AMD Radeon / Intel Arc GPU | **No GPU telemetry yet**, the GPU rows stay hidden. FPS and latency still work (PresentMon is vendor-neutral) |
+| AMD Ryzen CPU (Zen 2 - Zen 5) | Full with the PawnIO driver: temperature, CCD temperatures, package power, per-core clocks |
+| Intel CPU | Partial: total and per-core usage, model, base clock. Temperature only if the motherboard exposes an ACPI thermal zone; no package power or per-core clocks |
+| RAM, disk, display | Any hardware |
+
+AMD Radeon GPU and full Intel CPU support are planned.
 
 ## Download and install
 
@@ -15,7 +31,8 @@ Requires Windows 10 or 11 (64-bit). Pick one of three options:
 ### Option A: installer (recommended)
 
 1. Open the [latest release](https://github.com/brodatech-lab/ChromaHud/releases/latest).
-2. Download `ChromaHUD_<version>_x64-setup.exe` and run it.
+2. Download `ChromaHUD_<version>_x64-setup.exe` and run it. It installs to `C:\Program Files\ChromaHUD`,
+   so Windows asks for administrator rights, and adds ChromaHUD to the Start menu.
 3. Windows SmartScreen may say *"Windows protected your PC"* because the app is not code-signed yet.
    Click **More info**, then **Run anyway**.
 
@@ -33,7 +50,8 @@ To also install the PawnIO driver for AMD CPU temperature, power and per-core cl
 & ([scriptblock]::Create((irm https://github.com/brodatech-lab/ChromaHud/releases/latest/download/install.ps1))) -WithPawnIO
 ```
 
-The script downloads the latest installer from GitHub Releases, installs it silently and starts ChromaHUD.
+The script downloads the latest installer from GitHub Releases, installs it silently to Program Files
+(confirm the administrator prompt) and starts ChromaHUD.
 
 ### Option C: portable
 
