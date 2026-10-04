@@ -25,7 +25,7 @@ $setup = Join-Path $env:TEMP $asset.name
 Write-Host "Downloading $($asset.name) ($($release.tag_name))..."
 Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $setup
 
-Write-Host "Installing..."
+Write-Host "Installing to Program Files (confirm the administrator prompt)..."
 $process = Start-Process -FilePath $setup -ArgumentList "/S" -Wait -PassThru
 Remove-Item $setup -ErrorAction SilentlyContinue
 if ($process.ExitCode -ne 0) {
@@ -42,7 +42,7 @@ if ($WithPawnIO) {
     }
 }
 
-$exe = Join-Path $env:LOCALAPPDATA "ChromaHUD\chromahud.exe"
+$exe = Join-Path $env:ProgramFiles "ChromaHUD\chromahud.exe"
 if (-not $NoLaunch -and (Test-Path $exe)) {
     Write-Host "Starting ChromaHUD (it asks for administrator rights to read FPS and CPU sensors)..."
     Start-Process -FilePath $exe

@@ -53,9 +53,7 @@
     "externalBin": ["binaries/presentmon"],
     "windows": {
       "nsis": {
-        "installMode": "currentUser",
-        "languages": ["English", "Polish"],
-        "displayLanguageSelector": true
+        "installMode": "perMachine"
       }
     },
     "icon": [
