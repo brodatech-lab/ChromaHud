@@ -1,0 +1,44 @@
+[package]
+name = "chromahud"
+version = "0.1.0"
+description = "ChromaHUD - lightweight performance overlay for Windows games"
+authors = ["ChromaHUD"]
+edition = "2021"
+
+[lib]
+# The `_lib` suffix keeps the lib name distinct from the bin name (cargo issue #8519 on Windows).
+name = "chromahud_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri-plugin-store = "2.5.0"
+tauri-plugin-global-shortcut = "2.4.0"
+tauri-plugin-shell = "2.4.0"
+nvml-wrapper = "0.13.0"
+wmi = { version = "0.18.4", default-features = false }
+sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
+    "Win32_System_Performance",
+    "Win32_System_Threading",
+    "Win32_System_Registry",
+    "Win32_System_SystemInformation",
+    "Win32_Security",
+] }
+libloading = "0.8"
+
+# See https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@import "@fontsource/inter/latin-400.css";
+@import "@fontsource/inter/latin-600.css";
+@import "@fontsource/jetbrains-mono/latin-400.css";
+@import "@fontsource/jetbrains-mono/latin-700.css";
+@import "@fontsource/bangers/latin-400.css";
+
+@theme {
+  --font-comic: "Bangers", "Impact", sans-serif;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* The overlay window must stay fully transparent; avoid backdrop-filter here (expensive in WebView2). */
+html[data-window="overlay"],
+html[data-window="overlay"] body {
+  background: transparent;
+}
+
+html[data-window="settings"] body {
+  background: #0d0f14;
+  color: #e6e8ee;
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+html[data-window="settings"] #root {
+  overflow-y: auto;
+}
