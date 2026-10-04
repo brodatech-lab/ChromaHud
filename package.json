@@ -7,9 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri",
-    "fetch:presentmon": "powershell -ExecutionPolicy Bypass -File scripts/fetch-presentmon.ps1",
-    "fetch:pawnio": "powershell -ExecutionPolicy Bypass -File scripts/fetch-pawnio-modules.ps1"
+    "tauri": "tauri"
   },
   "dependencies": {
     "@fontsource/bangers": "^5.3.0",

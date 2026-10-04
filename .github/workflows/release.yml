@@ -1,0 +1,105 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  # Manual runs build the installer and portable zip as workflow artifacts without creating a release.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PRESENTMON_VERSION: "2.6.0"
+  PAWNIO_MODULES_VERSION: "0.2.11"
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Download PresentMon sidecar
+        run: |
+          New-Item -ItemType Directory -Force src-tauri/binaries | Out-Null
+          $url = "https://github.com/GameTechDev/PresentMon/releases/download/v$env:PRESENTMON_VERSION/PresentMon-$env:PRESENTMON_VERSION-x64.exe"
+          Invoke-WebRequest -Uri $url -OutFile src-tauri/binaries/presentmon-x86_64-pc-windows-msvc.exe
+
+      - name: Download PawnIO modules
+        run: |
+          $tag = $env:PAWNIO_MODULES_VERSION
+          $zip = Join-Path $env:RUNNER_TEMP "pawnio-modules.zip"
+          $dir = Join-Path $env:RUNNER_TEMP "pawnio-modules"
+          Invoke-WebRequest -Uri "https://github.com/namazso/PawnIO.Modules/releases/download/$tag/release_$($tag -replace '\.', '_').zip" -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $dir -Force
+          $module = Get-ChildItem -Path $dir -Recurse -Filter AMDFamily17.bin | Select-Object -First 1
+          if (-not $module) { throw "AMDFamily17.bin not found in PawnIO.Modules $tag" }
+          New-Item -ItemType Directory -Force src-tauri/resources/pawnio | Out-Null
+          Copy-Item $module.FullName src-tauri/resources/pawnio/AMDFamily17.bin
+
+      - run: npm ci
+
+      - name: Build installer and create draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: ChromaHUD ${{ github.ref_name }}
+          releaseDraft: true
+          releaseBody: |
+            ## Install
+
+            **Installer (recommended):** download `ChromaHUD_*_x64-setup.exe` below and run it.
+            Windows SmartScreen may warn about an unknown publisher: click **More info** > **Run anyway**.
+
+            **One command (PowerShell):**
+            ```powershell
+            irm https://github.com/brodatech-lab/ChromaHud/releases/latest/download/install.ps1 | iex
+            ```
+
+            **Portable:** unzip `ChromaHUD_*_x64-portable.zip` and run `chromahud.exe`.
+
+            ChromaHUD asks for administrator rights on start; without them there is no FPS or CPU sensor data.
+            For AMD CPU temperature / power install PawnIO: `winget install namazso.PawnIO`.
+
+      - name: Package portable zip
+        id: portable
+        run: |
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $stage = Join-Path $env:RUNNER_TEMP "ChromaHUD"
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item src-tauri/target/release/chromahud.exe, src-tauri/target/release/presentmon.exe, README.md $stage
+          $zip = "ChromaHUD_${version}_x64-portable.zip"
+          Compress-Archive -Path "$stage/*" -DestinationPath $zip -Force
+          "zip=$zip" >> $env:GITHUB_OUTPUT
+
+      - name: Upload portable zip and install script to the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.ref_name }}" "${{ steps.portable.outputs.zip }}" install/install.ps1 --clobber
+
+      - name: Upload build artifacts (manual runs)
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromahud-windows
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            ${{ steps.portable.outputs.zip }}
+            install/install.ps1

@@ -16,6 +16,9 @@ src-tauri/resources/pawnio/*.bin
 
 # Machine-specific cargo settings (custom target-dir)
 src-tauri/.cargo/
+
+# Local helper scripts (not published)
+scripts/
 dist-ssr
 *.local
 

@@ -8,6 +8,46 @@ Built with Tauri v2 (Rust) + React + Vite + TypeScript + Tailwind CSS v4.
 > feedback; the AI wrote the code. Expect rough edges, treat hardware-level parts (driver access,
 > sensor decoding) with care, and review before reusing anything in production.
 
+## Download and install
+
+Requires Windows 10 or 11 (64-bit). Pick one of three options:
+
+### Option A: installer (recommended)
+
+1. Open the [latest release](https://github.com/brodatech-lab/ChromaHud/releases/latest).
+2. Download `ChromaHUD_<version>_x64-setup.exe` and run it.
+3. Windows SmartScreen may say *"Windows protected your PC"* because the app is not code-signed yet.
+   Click **More info**, then **Run anyway**.
+
+### Option B: one command
+
+Open PowerShell (no administrator needed) and paste:
+
+```powershell
+irm https://github.com/brodatech-lab/ChromaHud/releases/latest/download/install.ps1 | iex
+```
+
+To also install the PawnIO driver for AMD CPU temperature, power and per-core clocks:
+
+```powershell
+& ([scriptblock]::Create((irm https://github.com/brodatech-lab/ChromaHud/releases/latest/download/install.ps1))) -WithPawnIO
+```
+
+The script downloads the latest installer from GitHub Releases, installs it silently and starts ChromaHUD.
+
+### Option C: portable
+
+Download `ChromaHUD_<version>_x64-portable.zip`, unzip it anywhere and run `chromahud.exe`.
+Keep `presentmon.exe` in the same folder.
+
+### After installing
+
+- ChromaHUD asks for **administrator rights** every time it starts. Without them there is no FPS and no CPU sensor data.
+- It lives in the system tray (bottom-right, next to the clock). Click the icon to open the settings.
+- `Ctrl+Shift+H` shows / hides the overlay, `Ctrl+Shift+O` opens settings, `Ctrl+Shift+C` toggles per-core CPU details.
+- AMD CPU temperature and power need the free PawnIO driver: `winget install namazso.PawnIO` (or Option B with `-WithPawnIO`).
+- Uninstall: **Settings > Apps > Installed apps > ChromaHUD > Uninstall**.
+
 ## Screenshots
 
 | Big-text FPS | Splash FPS, temperature gauges and per-core panel |
@@ -43,41 +83,46 @@ Built with Tauri v2 (Rust) + React + Vite + TypeScript + Tailwind CSS v4.
 | GPU (NVIDIA) | NVML (`nvml.dll` from the driver); AMD Radeon support is planned |
 | Resolution / refresh rate | `EnumDisplaySettingsW` |
 
-## Requirements
+## Building from source
+
+### Requirements
 
 - Windows 10/11 x64
 - Node.js 20+ and the Rust toolchain (MSVC)
 - Optional: [PawnIO](https://pawnio.eu/) driver for AMD CPU temperature, power and per-core clocks
 
-## Setup
+### Third-party binaries
+
+Two files are not stored in the repository and must be downloaded before building:
+
+| File | Download | Save as |
+| --- | --- | --- |
+| PresentMon console app | [`PresentMon-2.6.0-x64.exe`](https://github.com/GameTechDev/PresentMon/releases/tag/v2.6.0) | `src-tauri/binaries/presentmon-x86_64-pc-windows-msvc.exe` |
+| PawnIO AMD module | `AMDFamily17.bin` from [`release_0_2_11.zip`](https://github.com/namazso/PawnIO.Modules/releases/tag/0.2.11) | `src-tauri/resources/pawnio/AMDFamily17.bin` |
+
+PresentMon is bundled as a sidecar and the PawnIO module is embedded into the binary. Without the PawnIO
+driver installed the app still runs; CPU temperature, power and per-core clocks fall back to ACPI/PDH and
+the settings window shows a "limited" sensor status.
+
+### Develop
 
 ```powershell
 npm install
-npm run fetch:presentmon   # downloads PresentMon into src-tauri/binaries
-npm run fetch:pawnio       # downloads the signed PawnIO modules into src-tauri/resources/pawnio
-winget install namazso.PawnIO --source winget   # PawnIO driver (optional)
-```
-
-Both fetch steps are required before building: PresentMon is bundled as a sidecar and the PawnIO
-module is embedded into the binary. Without the PawnIO driver installed the app still runs; CPU
-temperature, power and per-core clocks fall back to ACPI/PDH and the settings window shows a
-"limited" sensor status.
-
-## Development
-
-```powershell
 npm run tauri dev
 ```
 
-Run the terminal **as administrator** to get FPS and CPU sensors during development
-(`scripts/dev-admin.ps1` opens an elevated dev session for you). Release builds request elevation
-automatically through the app manifest.
+Run the terminal **as administrator** to get FPS and CPU sensors during development. Release builds request
+elevation automatically through the app manifest.
 
-## Release build
+### Release
 
 ```powershell
 npm run tauri build
 ```
+
+Pushing a `v*` tag runs [the release workflow](.github/workflows/release.yml): it downloads the third-party
+binaries, builds the NSIS installer and a portable zip, and attaches them with `install/install.ps1` to a
+draft GitHub release.
 
 ## Controls
 
@@ -95,7 +140,8 @@ src/                     React frontend (overlay + settings windows share one bu
 src-tauri/src/           Rust backend
   metrics/               collectors: fps (PresentMon), gpu (NVML), cpu_sensors (PawnIO / ACPI), disk, memory, display
   tray.rs, lib.rs        tray menu, global shortcuts, window setup
-scripts/                 PresentMon / PawnIO download helpers, elevated dev launcher
+install/install.ps1      one-command installer (attached to every release)
+.github/workflows/       release build (installer + portable zip)
 ```
 
 ## Notes
