@@ -8,6 +8,16 @@ Built with Tauri v2 (Rust) + React + Vite + TypeScript + Tailwind CSS v4.
 > feedback; the AI wrote the code. Expect rough edges, treat hardware-level parts (driver access,
 > sensor decoding) with care, and review before reusing anything in production.
 
+## Screenshots
+
+| Big-text FPS | Splash FPS, temperature gauges and per-core panel |
+| --- | --- |
+| ![ChromaHUD overlay in The Witcher 3 with big-text FPS and full sensor panel](docs/screenshots/overlay-witcher3.png) | ![ChromaHUD overlay with splash FPS, CPU/GPU temperature gauges, CCD temperature and per-core clocks](docs/screenshots/overlay-splash-cores.png) |
+
+| Layout tab | Sensors tab |
+| --- | --- |
+| ![Settings window, Layout tab: position, FPS style and block order](docs/screenshots/settings-layout.png) | ![Settings window, Sensors tab: per-value toggles](docs/screenshots/settings-sensors.png) |
+
 ## Features
 
 - Transparent, always-on-top, click-through overlay (does not steal focus or mouse input).
