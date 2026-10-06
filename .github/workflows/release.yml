@@ -53,6 +53,21 @@ jobs:
 
       - run: npm ci
 
+      - name: Release notes from CHANGELOG
+        id: notes
+        run: |
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $lines = Get-Content CHANGELOG.md
+          $start = [Array]::FindIndex([string[]]$lines, [Predicate[string]]{ param($l) $l -match "^## \[$([regex]::Escape($version))\]" })
+          if ($start -lt 0) { throw "CHANGELOG.md has no section for $version" }
+          $section = @()
+          foreach ($line in $lines[($start + 1)..($lines.Count - 1)]) {
+            if ($line -match '^## \[' -or $line -match '^\[[^\]]+\]: ') { break }
+            $section += $line
+          }
+          $body = ($section -join "`n").Trim()
+          "body<<CHANGELOG_EOF`n$body`nCHANGELOG_EOF" >> $env:GITHUB_OUTPUT
+
       - name: Build installer and create draft release
         uses: tauri-apps/tauri-action@v0
         env:
@@ -62,20 +77,9 @@ jobs:
           releaseName: ChromaHUD ${{ github.ref_name }}
           releaseDraft: true
           releaseBody: |
-            ## Install
+            ## What's new
 
-            **Installer (recommended):** download `ChromaHUD_*_x64-setup.exe` below and run it.
-            Windows SmartScreen may warn about an unknown publisher: click **More info** > **Run anyway**.
-
-            **One command (PowerShell):**
-            ```powershell
-            irm https://github.com/brodatech-lab/ChromaHud/releases/latest/download/install.ps1 | iex
-            ```
-
-            **Portable:** unzip `ChromaHUD_*_x64-portable.zip` and run `chromahud.exe`.
-
-            ChromaHUD asks for administrator rights on start; without them there is no FPS or CPU sensor data.
-            For AMD CPU temperature / power install PawnIO: `winget install namazso.PawnIO`.
+            ${{ steps.notes.outputs.body }}
 
       - name: Package portable zip
         id: portable
