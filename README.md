@@ -1,28 +1,26 @@
 # ChromaHUD
 
-Lightweight, click-through performance overlay for Windows games with a comic-book look.
+Lightweight, FPS overlay for Windows games.
 Built with Tauri v2 (Rust) + React + Vite + TypeScript + Tailwind CSS v4.
 
 <p align="center">
   <img src="docs/screenshots/overlay-hero.png" width="320" alt="ChromaHUD overlay: splash FPS, CPU with per-core clocks and CCD temperature, NVIDIA GPU with VRAM clock, fan and power limit, RAM, disk and latency">
 </p>
 
-> **This project is vibecoded.** It was built almost entirely through conversation with an AI coding
-> assistant (Cursor agent): the human described what they wanted, tested it on real hardware and gave
-> feedback; the AI wrote the code. Expect rough edges, treat hardware-level parts (driver access,
-> sensor decoding) with care, and review before reusing anything in production.
+> **This project is vibecoded.** It was built almost entirely through conversation with an AI coding assistant
 
 ## Hardware support
 
 | Hardware | Support |
 | --- | --- |
 | NVIDIA GPU | Full: usage, clocks, temperature, power, VRAM, fan, P-state, power limit, throttle reason (NVML) |
-| AMD Radeon / Intel Arc GPU | **No GPU telemetry yet**, the GPU rows stay hidden. FPS and latency still work (PresentMon is vendor-neutral) |
+| AMD Radeon GPU (Adrenalin driver) | Usage, core / VRAM clock, temperature, power, VRAM usage, fan RPM (ADLX). No P-state, power limit or throttle reason; integrated Radeon GPUs report no fan |
+| Intel Arc / other GPUs | Basic: usage and memory from the Windows GPU counters (the same data as Task Manager) |
 | AMD Ryzen CPU (Zen 2 - Zen 5) | Full with the PawnIO driver: temperature, CCD temperatures, package power, per-core clocks |
 | Intel CPU | Partial: total and per-core usage, model, base clock. Temperature only if the motherboard exposes an ACPI thermal zone; no package power or per-core clocks |
 | RAM, disk, display | Any hardware |
 
-AMD Radeon GPU and full Intel CPU support are planned.
+FPS and latency work on every GPU (PresentMon is vendor-neutral). Full Intel CPU support is planned.
 
 ## Download and install
 
@@ -83,6 +81,7 @@ Keep `presentmon.exe` in the same folder.
 - Display latency, GPU busy time and a CPU-bound / GPU-bound verdict.
 - CPU: usage, effective clock, temperature (Tctl), package power, model name, per-core usage and clocks, CCD temperatures.
 - GPU (NVIDIA): usage, core / VRAM clock, temperature, power, VRAM usage, fan % and RPM, P-state, power limit and throttle reason.
+- GPU (AMD Radeon): usage, core / VRAM clock, temperature, power, VRAM usage and fan RPM.
 - RAM usage and speed (e.g. DDR5-6000), disk throughput, screen resolution and refresh rate.
 - Color-changing temperature gauges for CPU and GPU.
 - Settings window: colors, panel background and opacity, font and size, position sliders and presets,
@@ -98,7 +97,9 @@ Keep `presentmon.exe` in the same folder.
 | CPU clock / temperature fallback | PDH `% Processor Performance` + WMI `MSAcpi_ThermalZoneTemperature` (not exposed on every board) |
 | RAM usage / speed | sysinfo / WMI `Win32_PhysicalMemory` |
 | Disk throughput | PDH `PhysicalDisk(_Total)` counters |
-| GPU (NVIDIA) | NVML (`nvml.dll` from the driver); AMD Radeon support is planned |
+| GPU (NVIDIA) | NVML (`nvml.dll` from the driver) |
+| GPU (AMD Radeon) | ADLX (`amdadlx64.dll` from the Adrenalin driver) |
+| GPU usage / memory fallback | PDH `GPU Engine` and `GPU Adapter Memory` counters |
 | Resolution / refresh rate | `EnumDisplaySettingsW` |
 
 ## Building from source
@@ -115,7 +116,7 @@ Two files are not stored in the repository and must be downloaded before buildin
 
 | File | Download | Save as |
 | --- | --- | --- |
-| PresentMon console app | [`PresentMon-2.6.0-x64.exe`](https://github.com/GameTechDev/PresentMon/releases/tag/v2.6.0) | `src-tauri/binaries/presentmon-x86_64-pc-windows-msvc.exe` |
+| PresentMon console app | x64 console build from [PresentMon v2.6.0](https://github.com/GameTechDev/PresentMon/releases/tag/v2.6.0) | `src-tauri/binaries/presentmon-x86_64-pc-windows-msvc.exe` |
 | PawnIO AMD module | `AMDFamily17.bin` from [`release_0_2_11.zip`](https://github.com/namazso/PawnIO.Modules/releases/tag/0.2.11) | `src-tauri/resources/pawnio/AMDFamily17.bin` |
 
 PresentMon is bundled as a sidecar and the PawnIO module is embedded into the binary. Without the PawnIO
@@ -156,7 +157,7 @@ src/                     React frontend (overlay + settings windows share one bu
   overlay/               HUD components (FPS splash, big text, stat rows, gauges, cores panel)
   settings/              settings window with Look / Layout / Sensors tabs
 src-tauri/src/           Rust backend
-  metrics/               collectors: fps (PresentMon), gpu (NVML), cpu_sensors (PawnIO / ACPI), disk, memory, display
+  metrics/               collectors: fps (PresentMon), gpu (NVML / ADLX / PDH), cpu_sensors (PawnIO / ACPI), disk, memory, display
   tray.rs, lib.rs        tray menu, global shortcuts, window setup
 install/install.ps1      one-command installer (attached to every release)
 .github/workflows/       release build (installer + portable zip)
@@ -175,4 +176,5 @@ install/install.ps1      one-command installer (attached to every release)
 ## Third-party components
 
 - [PresentMon](https://github.com/GameTechDev/PresentMon) (MIT) - frame timing via ETW
+- [adlx](https://github.com/Traverse-Research/adlx-rs) (MIT) - Rust bindings for AMD ADLX
 - [PawnIO](https://github.com/namazso/PawnIO) and [PawnIO.Modules](https://github.com/namazso/PawnIO.Modules) - kernel access for CPU sensors
