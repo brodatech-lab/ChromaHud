@@ -4,7 +4,7 @@ All notable changes to ChromaHUD are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] - 2026-10-06
 
 ### Added
 
@@ -21,6 +21,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 - GPU rows without data (FAN, LIMIT, VRAM) are hidden instead of showing `--`. VRAM without a known total
   shows only the used amount; small totals (integrated GPUs) keep one decimal.
+- GitHub release pages list the changes of that version ("What's new") taken from this changelog;
+  install instructions live in the README.
 
 ## [0.1.1] - 2026-10-05
 
@@ -53,6 +55,6 @@ the new per-machine installer does not replace it.
 - Settings window with Look / Layout / Sensors tabs, drag-and-drop block order and panel color / opacity.
 - Windows release pipeline: NSIS installer, portable zip and a one-command PowerShell installer.
 
-[Unreleased]: https://github.com/brodatech-lab/ChromaHud/compare/v0.1.1...HEAD
+[0.2.0]: https://github.com/brodatech-lab/ChromaHud/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/brodatech-lab/ChromaHud/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/brodatech-lab/ChromaHud/releases/tag/v0.1.0

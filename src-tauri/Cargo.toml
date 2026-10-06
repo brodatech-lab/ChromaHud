@@ -1,6 +1,6 @@
 [package]
 name = "chromahud"
-version = "0.1.1"
+version = "0.2.0"
 description = "ChromaHUD - lightweight performance overlay for Windows games"
 authors = ["ChromaHUD"]
 edition = "2021"
