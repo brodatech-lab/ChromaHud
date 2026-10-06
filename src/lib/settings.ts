@@ -7,7 +7,7 @@ export const SETTINGS_EVENT = "settings-changed";
 const STORE_FILE = "settings.json";
 const STORE_KEY = "hud";
 
-export const HUD_BLOCKS: HudBlock[] = ["fps", "latency", "cpu", "gpu", "ram", "disk", "display"];
+export const HUD_BLOCKS: HudBlock[] = ["fps", "latency", "cpu", "gpu", "vram", "ram", "disk", "display"];
 
 export const DEFAULT_SETTINGS: HudSettings = {
   opacity: 0.9,
@@ -17,7 +17,12 @@ export const DEFAULT_SETTINGS: HudSettings = {
   fontSize: 15,
   posX: 0,
   posY: 0,
+  overlayLayout: "vertical",
+  blockGap: 12,
   fpsStyle: "splash",
+  keepGameTracked: false,
+  showFpsProcess: true,
+  fpsProcessSource: "exe",
   fpsBigSize: 72,
   fpsSplashSize: 150,
   blockOrder: HUD_BLOCKS,
@@ -34,6 +39,7 @@ export const DEFAULT_SETTINGS: HudSettings = {
   showCpuCcdTemp: true,
   showGpu: true,
   showGpuClock: true,
+  showVram: true,
   showGpuMemClock: true,
   showGpuTemp: true,
   showGpuPower: true,
@@ -72,14 +78,31 @@ function migrate(settings: HudSettings, saved: StoredSettings | undefined): HudS
     }
   }
   const { fpsSplash: _legacy, ...current } = settings as HudSettings & Pick<StoredSettings, "fpsSplash">;
-  return { ...current, fpsStyle, blockOrder: normalizeBlockOrder(blockOrder) };
+  return {
+    ...current,
+    fpsStyle,
+    blockOrder: normalizeBlockOrder(blockOrder),
+    blockGap: Math.min(48, Math.max(0, settings.blockGap)),
+  };
 }
 
 /** Drops unknown entries and duplicates, then appends blocks missing from older saves. */
 export function normalizeBlockOrder(order: readonly string[] | undefined): HudBlock[] {
   const known = new Set<string>(HUD_BLOCKS);
   const result = [...new Set(order ?? [])].filter((block): block is HudBlock => known.has(block));
-  return [...result, ...HUD_BLOCKS.filter((block) => !result.includes(block))];
+  for (const block of HUD_BLOCKS) {
+    if (result.includes(block)) continue;
+    // Older saves had VRAM inside the GPU panel; keep it next to GPU after the split.
+    if (block === "vram") {
+      const gpuIdx = result.indexOf("gpu");
+      if (gpuIdx >= 0) {
+        result.splice(gpuIdx + 1, 0, "vram");
+        continue;
+      }
+    }
+    result.push(block);
+  }
+  return result;
 }
 
 /** Persists the settings and broadcasts them so the overlay updates live. */

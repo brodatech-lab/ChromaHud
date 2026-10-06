@@ -36,6 +36,11 @@ pub fn toggle_cpu_cores(app: &AppHandle) {
     let _ = app.emit_to(OVERLAY_LABEL, "toggle-cpu-cores", ());
 }
 
+#[tauri::command]
+fn set_keep_game(tracker: tauri::State<'_, Arc<FpsTracker>>, enabled: bool) {
+    tracker.set_keep_target(enabled);
+}
+
 /// Stretches the overlay over the primary monitor and makes it ignore all mouse input.
 fn setup_overlay(app: &AppHandle) -> tauri::Result<()> {
     let Some(overlay) = app.get_webview_window(OVERLAY_LABEL) else {
@@ -128,16 +133,18 @@ pub fn run() {
         .plugin(shortcut_plugin())
         .manage(PresentMonProcess(Mutex::new(None)))
         .manage(metrics::SystemInfoState::default())
+        .manage(Arc::new(FpsTracker::default()))
         .invoke_handler(tauri::generate_handler![
             metrics::get_system_info,
-            tray::set_cpu_cores_checked
+            tray::set_cpu_cores_checked,
+            set_keep_game
         ])
         .setup(|app| {
             let handle = app.handle();
             setup_overlay(handle)?;
             tray::create(handle)?;
 
-            let tracker = Arc::new(FpsTracker::default());
+            let tracker = app.state::<Arc<FpsTracker>>().inner().clone();
             start_presentmon(handle, tracker.clone());
             metrics::spawn_collector(handle.clone(), tracker);
             Ok(())

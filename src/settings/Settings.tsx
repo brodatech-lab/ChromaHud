@@ -4,7 +4,7 @@ import FpsSplash from "../overlay/FpsSplash";
 import { useHudSettings } from "../hooks/useHudSettings";
 import { useSystemInfo } from "../hooks/useSystemInfo";
 import { DEFAULT_SETTINGS } from "../lib/settings";
-import type { FpsStyle, HudBlock, HudFont, HudSettings, SystemInfo } from "../types";
+import type { FpsProcessSource, FpsStyle, HudBlock, HudFont, HudSettings, OverlayLayout, SystemInfo } from "../types";
 
 type Tab = "look" | "layout" | "sensors";
 
@@ -34,11 +34,22 @@ const FPS_STYLES: { value: FpsStyle; label: string }[] = [
   { value: "row", label: "Row" },
 ];
 
+const FPS_PROCESS_SOURCES: { value: FpsProcessSource; label: string }[] = [
+  { value: "exe", label: "Exe" },
+  { value: "game", label: "Game name" },
+];
+
+const LAYOUTS: { value: OverlayLayout; label: string }[] = [
+  { value: "vertical", label: "Vertical" },
+  { value: "horizontal", label: "Horizontal" },
+];
+
 const BLOCK_LABELS: Record<HudBlock, string> = {
   fps: "FPS",
   latency: "Latency",
   cpu: "CPU",
   gpu: "GPU",
+  vram: "VRAM",
   ram: "RAM",
   disk: "Disk",
   display: "Resolution",
@@ -74,15 +85,16 @@ const SENSOR_GROUPS: { title: string; toggles: ToggleDef[] }[] = [
   {
     title: "GPU",
     toggles: [
-      { key: "showGpu", label: "Usage + VRAM rows" },
+      { key: "showGpu", label: "Usage row" },
       { key: "showGpuClock", label: "Clock", parent: "showGpu" },
-      { key: "showGpuMemClock", label: "VRAM clock", parent: "showGpu" },
       { key: "showGpuTemp", label: "Temperature", parent: "showGpu" },
       { key: "showGpuPower", label: "Power", parent: "showGpu" },
       { key: "showGpuGauge", label: "Temperature gauge" },
       { key: "showGpuModel", label: "Model name" },
       { key: "showGpuFan", label: "Fan" },
       { key: "showGpuLimit", label: "Power limit / throttling" },
+      { key: "showVram", label: "VRAM" },
+      { key: "showGpuMemClock", label: "VRAM clock", parent: "showVram" },
     ],
   },
   {
@@ -112,6 +124,8 @@ function isBlockEnabled(settings: HudSettings, block: HudBlock): boolean {
       return settings.showCpu || settings.showCpuModel || settings.showCpuGauge || settings.showCpuCores;
     case "gpu":
       return settings.showGpu || settings.showGpuModel || settings.showGpuGauge || settings.showGpuFan || settings.showGpuLimit;
+    case "vram":
+      return settings.showVram;
     case "ram":
       return settings.showRam;
     case "disk":
@@ -248,6 +262,48 @@ export default function Settings() {
 
       {tab === "layout" && (
         <>
+          <Section title="Arrangement">
+            <div className="grid grid-cols-2 gap-1.5">
+              {LAYOUTS.map(({ value, label }) => (
+                <ChoiceButton
+                  key={value}
+                  active={settings.overlayLayout === value}
+                  color={accent}
+                  onClick={() => {
+                    if (
+                      value === "horizontal" &&
+                      settings.overlayLayout !== "horizontal" &&
+                      settings.posX === 0 &&
+                      settings.posY === 0
+                    ) {
+                      update({ overlayLayout: value, posX: 50, posY: 0 });
+                    } else {
+                      update({ overlayLayout: value });
+                    }
+                  }}
+                >
+                  {label}
+                </ChoiceButton>
+              ))}
+            </div>
+            {settings.overlayLayout === "horizontal" && (
+              <>
+                <p className="-mt-1 text-[11px] text-white/40">
+                  Blocks sit in one row. The per-core CPU panel is hidden in this layout.
+                </p>
+                <Field label="Gap between blocks" value={`${settings.blockGap}px`}>
+                  <Slider
+                    value={settings.blockGap}
+                    min={0}
+                    max={48}
+                    step={2}
+                    onChange={(blockGap) => update({ blockGap })}
+                  />
+                </Field>
+              </>
+            )}
+          </Section>
+
           <Section title="Position">
             <div className="grid grid-cols-2 gap-3">
               <Field label="Horizontal" value={`${settings.posX}%`}>
@@ -289,6 +345,37 @@ export default function Settings() {
                 <Slider value={settings.fpsBigSize} min={32} max={160} step={2} onChange={(fpsBigSize) => update({ fpsBigSize })} />
               </Field>
             )}
+            <label className="flex items-center gap-2 text-sm text-white/80">
+              <input
+                type="checkbox"
+                checked={settings.keepGameTracked}
+                onChange={(e) => update({ keepGameTracked: e.target.checked })}
+              />
+              Keep tracking the game after Alt+Tab
+            </label>
+            <p className="-mt-1 text-[11px] text-white/40">
+              Overlay keeps showing the last full-screen game while other windows are focused.
+            </p>
+            <label className="flex items-center gap-2 text-sm text-white/80">
+              <input
+                type="checkbox"
+                checked={settings.showFpsProcess}
+                onChange={(e) => update({ showFpsProcess: e.target.checked })}
+              />
+              Show process name
+            </label>
+            <div className={`grid grid-cols-2 gap-1.5 ${settings.showFpsProcess ? "" : "pointer-events-none opacity-40"}`}>
+              {FPS_PROCESS_SOURCES.map(({ value, label }) => (
+                <ChoiceButton
+                  key={value}
+                  active={settings.fpsProcessSource === value}
+                  color={accent}
+                  onClick={() => update({ fpsProcessSource: value })}
+                >
+                  {label}
+                </ChoiceButton>
+              ))}
+            </div>
           </Section>
 
           <Section title="Order">

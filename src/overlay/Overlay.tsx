@@ -52,7 +52,17 @@ export default function Overlay() {
   const systemInfo = useSystemInfo();
   const { settings, update } = useHudSettings();
   const gpu = metrics?.gpu ?? null;
-  const fpsLabel = metrics && !metrics.fpsCapturing ? ADMIN_HINT : metrics?.fpsProcess;
+  const horizontal = settings.overlayLayout === "horizontal";
+  const processName =
+    settings.fpsProcessSource === "game" ? (metrics?.fpsGame ?? metrics?.fpsProcess) : metrics?.fpsProcess;
+  const fpsLabel =
+    metrics && !metrics.fpsCapturing
+      ? ADMIN_HINT
+      : !settings.showFpsProcess
+        ? null
+        : metrics?.fpsPaused && processName
+          ? `${processName} · paused`
+          : processName;
 
   useEffect(() => {
     const unlisten = listen("toggle-cpu-cores", () => update((current) => ({ showCpuCores: !current.showCpuCores })));
@@ -65,6 +75,10 @@ export default function Overlay() {
     void invoke("set_cpu_cores_checked", { checked: settings.showCpuCores });
   }, [settings.showCpuCores]);
 
+  useEffect(() => {
+    void invoke("set_keep_game", { enabled: settings.keepGameTracked });
+  }, [settings.keepGameTracked]);
+
   // Translating by the same percentage as the offset keeps the HUD fully on screen at 0% and 100%.
   const style = {
     left: `${settings.posX}%`,
@@ -73,6 +87,7 @@ export default function Overlay() {
     opacity: settings.opacity,
     fontFamily: `"${settings.fontFamily}", system-ui, sans-serif`,
     fontSize: `${settings.fontSize}px`,
+    ...(horizontal ? { gap: `${settings.blockGap}px` } : {}),
     "--hud-primary": settings.primaryColor,
     "--hud-secondary": settings.secondaryColor,
   } as CSSProperties;
@@ -169,7 +184,7 @@ export default function Overlay() {
             <StatRow label="CPU" value={orDash(metrics?.cpuUsage, 0, "%")} detail={cpuDetail} percent={metrics?.cpuUsage} />
           ),
           settings.showCpuGauge && <TempGauge value={metrics?.cpuTempC} {...CPU_TEMP_RANGE} />,
-          settings.showCpuCores && metrics && metrics.cores.length > 0 && (
+          settings.showCpuCores && !horizontal && metrics && metrics.cores.length > 0 && (
             <CpuCores cores={metrics.cores} ccdTemps={settings.showCpuCcdTemp ? metrics.ccdTempsC : []} />
           ),
         );
@@ -179,14 +194,6 @@ export default function Overlay() {
         return tableBlock(
           settings.showGpuModel && gpuModel && <ModelCaption name={gpuModel} />,
           settings.showGpu && <StatRow label="GPU" value={orDash(gpu.usage, 0, "%")} detail={gpuDetail} percent={gpu.usage} />,
-          settings.showGpu && (gpu.vramUsedBytes != null || gpu.vramTotalBytes != null) && (
-            <StatRow
-              label="VRAM"
-              value={vramValue(gpu.vramUsedBytes, gpu.vramTotalBytes)}
-              detail={settings.showGpuMemClock && gpu.memClockMhz != null ? `${gpu.memClockMhz} MHz` : undefined}
-              percent={percentOf(gpu.vramUsedBytes, gpu.vramTotalBytes)}
-            />
-          ),
           settings.showGpuFan && (gpu.fanPercent != null || gpu.fanRpm != null) && (
             <StatRow
               label="FAN"
@@ -205,6 +212,18 @@ export default function Overlay() {
             />
           ),
           settings.showGpuGauge && <TempGauge value={gpu.tempC} {...GPU_TEMP_RANGE} />,
+        );
+
+      case "vram":
+        if (!gpu || !settings.showVram) return null;
+        if (gpu.vramUsedBytes == null && gpu.vramTotalBytes == null) return null;
+        return tableBlock(
+          <StatRow
+            label="VRAM"
+            value={vramValue(gpu.vramUsedBytes, gpu.vramTotalBytes)}
+            detail={settings.showGpuMemClock && gpu.memClockMhz != null ? `${gpu.memClockMhz} MHz` : undefined}
+            percent={percentOf(gpu.vramUsedBytes, gpu.vramTotalBytes)}
+          />,
         );
 
       case "ram":
@@ -243,23 +262,31 @@ export default function Overlay() {
     }
   };
 
-  // Consecutive table blocks share one panel; a standalone FPS block in between splits it.
+  // Vertical: consecutive table blocks share one panel. Horizontal: each block is its own panel.
   const groups: BlockGroup[] = [];
   for (const block of settings.blockOrder) {
     const rendered = renderBlock(block);
     if (!rendered) continue;
     const node = <Fragment key={block}>{rendered.node}</Fragment>;
     const last = groups[groups.length - 1];
-    if (!rendered.standalone && last && !last.standalone) {
+    if (!horizontal && !rendered.standalone && last && !last.standalone) {
       last.nodes.push(node);
     } else {
       groups.push({ key: block, standalone: rendered.standalone, nodes: [node] });
     }
   }
 
+  const align = horizontal
+    ? settings.posY > 50
+      ? "items-end"
+      : "items-start"
+    : settings.posX > 50
+      ? "items-end"
+      : "items-start";
+
   return (
     <div
-      className={`pointer-events-none absolute flex flex-col gap-3 p-5 ${settings.posX > 50 ? "items-end" : "items-start"}`}
+      className={`pointer-events-none absolute flex p-5 ${horizontal ? "flex-row" : "flex-col gap-3"} ${align}`}
       style={style}
     >
       {groups.map((group) =>

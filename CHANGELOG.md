@@ -4,6 +4,27 @@ All notable changes to ChromaHUD are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [0.3.0] - 2026-10-06
+
+### Added
+
+- Horizontal overlay layout (Layout > Arrangement): blocks sit in one row and can be moved to any
+  screen edge. The per-core CPU panel is hidden in this layout.
+- Gap slider between HUD blocks in the horizontal layout (Layout > Arrangement, 0–48 px).
+- Show / hide the name under FPS, and choose the exe file name or the game name from the executable's
+  version resource (FileDescription / ProductName).
+- "Keep tracking the game after Alt+Tab" option (Layout > FPS): the overlay keeps showing the last
+  full-screen game's FPS and usage while other windows are focused. Another full-screen game takes over;
+  the game is dropped when its process exits.
+
+### Changed
+
+- A focused game that stops presenting frames (e.g. a pause or graphics menu) now shows 0 FPS labelled
+  "paused" instead of switching to the desktop.
+- GPU and VRAM are separate reorderable HUD blocks. Older layouts keep VRAM next to GPU.
+
 ## [0.2.0] - 2026-10-06
 
 ### Added
@@ -55,6 +76,8 @@ the new per-machine installer does not replace it.
 - Settings window with Look / Layout / Sensors tabs, drag-and-drop block order and panel color / opacity.
 - Windows release pipeline: NSIS installer, portable zip and a one-command PowerShell installer.
 
+[Unreleased]: https://github.com/brodatech-lab/ChromaHud/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/brodatech-lab/ChromaHud/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/brodatech-lab/ChromaHud/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/brodatech-lab/ChromaHud/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/brodatech-lab/ChromaHud/releases/tag/v0.1.0

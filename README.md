@@ -66,6 +66,8 @@ Keep `presentmon.exe` in the same folder.
 
 ## Screenshots
 
+![ChromaHUD horizontal overlay in Ghost of Tsushima: FPS, GPU, VRAM, latency, CPU, RAM and disk in one row](docs/screenshots/overlay-horizontal.jpg)
+
 | Big-text FPS | Splash FPS, temperature gauges and per-core panel |
 | --- | --- |
 | ![ChromaHUD overlay in The Witcher 3 with big-text FPS and full sensor panel](docs/screenshots/overlay-witcher3.png) | ![ChromaHUD overlay with splash FPS, CPU/GPU temperature gauges, CCD temperature and per-core clocks](docs/screenshots/overlay-splash-cores.png) |
@@ -78,6 +80,9 @@ Keep `presentmon.exe` in the same folder.
 
 - Transparent, always-on-top, click-through overlay (does not steal focus or mouse input).
 - FPS of the foreground app in three styles: comic starburst splash, big comic lettering, or a plain table row.
+- Game pause menus show as "paused" instead of the desktop; optionally keep tracking the game after Alt+Tab.
+- Show the exe name or the game name under FPS, or hide the label.
+- Horizontal overlay layout with a gap slider, and GPU / VRAM as separate reorderable blocks.
 - Display latency, GPU busy time and a CPU-bound / GPU-bound verdict.
 - CPU: usage, effective clock, temperature (Tctl), package power, model name, per-core usage and clocks, CCD temperatures.
 - GPU (NVIDIA): usage, core / VRAM clock, temperature, power, VRAM usage, fan % and RPM, P-state, power limit and throttle reason.

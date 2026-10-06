@@ -1,6 +1,6 @@
 [package]
 name = "chromahud"
-version = "0.2.0"
+version = "0.3.0"
 description = "ChromaHUD - lightweight performance overlay for Windows games"
 authors = ["ChromaHUD"]
 edition = "2021"
@@ -31,6 +31,7 @@ windows = { version = "0.62.2", features = [
     "Win32_System_Threading",
     "Win32_System_Registry",
     "Win32_System_SystemInformation",
+    "Win32_Storage_FileSystem",
     "Win32_Security",
 ] }
 libloading = "0.8"
