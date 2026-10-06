@@ -22,6 +22,13 @@ function ModelCaption({ name }: { name: string }) {
   return <div className="-mb-1 truncate text-[0.65em] uppercase tracking-widest text-white/40">{name}</div>;
 }
 
+/** "2.9 / 24 GB"; integrated GPUs have small carve-outs (0.5 GB) and Windows counters give no total. */
+function vramValue(used: number | null, total: number | null): string {
+  if (total == null) return `${formatGiB(used)} GB`;
+  const totalDigits = total < 2 * 1024 ** 3 ? 1 : 0;
+  return `${formatGiB(used)} / ${formatGiB(total, totalDigits)} GB`;
+}
+
 interface RenderedBlock {
   /** Standalone blocks (FPS splash / big text) sit between panels instead of inside one. */
   standalone: boolean;
@@ -105,6 +112,8 @@ export default function Overlay() {
         gpuPowerPercent != null && `${Math.round(gpuPowerPercent)}% TDP`,
       ]) ?? "--")
     : "--";
+  const gpuLimitAvailable =
+    gpu != null && (gpu.pstate != null || gpu.powerLimitW != null || gpu.throttleReason != null);
 
   const cpuModel = systemInfo?.cpuModel ? shortCpuName(systemInfo.cpuModel) : null;
   const gpuModel = gpu?.name ?? systemInfo?.gpuModel ?? null;
@@ -170,23 +179,23 @@ export default function Overlay() {
         return tableBlock(
           settings.showGpuModel && gpuModel && <ModelCaption name={gpuModel} />,
           settings.showGpu && <StatRow label="GPU" value={orDash(gpu.usage, 0, "%")} detail={gpuDetail} percent={gpu.usage} />,
-          settings.showGpu && (
+          settings.showGpu && (gpu.vramUsedBytes != null || gpu.vramTotalBytes != null) && (
             <StatRow
               label="VRAM"
-              value={`${formatGiB(gpu.vramUsedBytes)} / ${formatGiB(gpu.vramTotalBytes, 0)} GB`}
-              detail={settings.showGpuMemClock ? orDash(gpu.memClockMhz, 0, " MHz") : undefined}
+              value={vramValue(gpu.vramUsedBytes, gpu.vramTotalBytes)}
+              detail={settings.showGpuMemClock && gpu.memClockMhz != null ? `${gpu.memClockMhz} MHz` : undefined}
               percent={percentOf(gpu.vramUsedBytes, gpu.vramTotalBytes)}
             />
           ),
-          settings.showGpuFan && (
+          settings.showGpuFan && (gpu.fanPercent != null || gpu.fanRpm != null) && (
             <StatRow
               label="FAN"
-              value={orDash(gpu.fanPercent, 0, "%")}
-              detail={gpu.fanRpm != null ? `${gpu.fanRpm} RPM` : undefined}
+              value={gpu.fanPercent != null ? `${gpu.fanPercent}%` : `${gpu.fanRpm} RPM`}
+              detail={gpu.fanPercent != null && gpu.fanRpm != null ? `${gpu.fanRpm} RPM` : undefined}
               percent={gpu.fanPercent}
             />
           ),
-          settings.showGpuLimit && (
+          settings.showGpuLimit && gpuLimitAvailable && (
             <StatRow
               label="LIMIT"
               value={gpuLimitValue}
