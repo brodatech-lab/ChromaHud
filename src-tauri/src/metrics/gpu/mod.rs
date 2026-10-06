@@ -1,5 +1,6 @@
 mod amd;
 mod nvidia;
+mod pdh;
 
 use serde::Serialize;
 
@@ -27,14 +28,63 @@ pub struct GpuMetrics {
 pub trait GpuProvider {
     fn name(&self) -> &str;
     fn sample(&mut self) -> Option<GpuMetrics>;
+    /// Extra detail for `--dump-metrics`.
+    fn diagnostics(&self) -> serde_json::Value {
+        serde_json::Value::Null
+    }
+    /// True when the vendor usage value is less reliable than the Windows counters.
+    fn prefers_counter_usage(&self) -> bool {
+        false
+    }
 }
 
-/// Picks the first vendor library that loads on this machine.
+/// A vendor provider whose missing usage / memory values are filled from the Windows GPU counters.
+struct WithPdhFallback<P> {
+    inner: P,
+    pdh: Option<pdh::PdhGpu>,
+}
+
+impl<P: GpuProvider> WithPdhFallback<P> {
+    fn new(inner: P) -> Self {
+        Self { inner, pdh: pdh::PdhGpu::new() }
+    }
+}
+
+impl<P: GpuProvider> GpuProvider for WithPdhFallback<P> {
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+
+    fn sample(&mut self) -> Option<GpuMetrics> {
+        let mut metrics = self.inner.sample()?;
+        let prefer_counters = self.inner.prefers_counter_usage();
+        if prefer_counters || metrics.usage.is_none() || metrics.vram_used_bytes.is_none() {
+            if let Some(sample) = self.pdh.as_mut().map(|p| p.sample()) {
+                metrics.usage = if prefer_counters {
+                    sample.usage.or(metrics.usage)
+                } else {
+                    metrics.usage.or(sample.usage)
+                };
+                metrics.vram_used_bytes = metrics.vram_used_bytes.or(sample.vram_used_bytes);
+            }
+        }
+        Some(metrics)
+    }
+
+    fn diagnostics(&self) -> serde_json::Value {
+        self.inner.diagnostics()
+    }
+}
+
+/// Picks the first vendor library that loads on this machine, then the vendor-neutral counters.
 pub fn detect_provider() -> Option<Box<dyn GpuProvider>> {
     if let Some(provider) = nvidia::NvidiaProvider::new() {
         return Some(Box::new(provider));
     }
     if let Some(provider) = amd::AmdProvider::new() {
+        return Some(Box::new(WithPdhFallback::new(provider)));
+    }
+    if let Some(provider) = pdh::PdhProvider::new() {
         return Some(Box::new(provider));
     }
     None

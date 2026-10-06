@@ -34,6 +34,7 @@ windows = { version = "0.62.2", features = [
     "Win32_Security",
 ] }
 libloading = "0.8"
+adlx = "0.0.0-alpha.1"
 
 # See https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
