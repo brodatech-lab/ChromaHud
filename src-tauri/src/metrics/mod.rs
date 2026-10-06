@@ -77,24 +77,94 @@ pub fn get_system_info(state: tauri::State<'_, SystemInfoState>) -> Option<Syste
     state.0.lock().unwrap().clone()
 }
 
+/// Every metric source, probed once and then sampled on demand.
+struct Collector {
+    system: system::SystemSampler,
+    cores: Vec<topology::PhysicalCore>,
+    cpu_sensors: cpu_sensors::CpuSensors,
+    gpu_provider: Option<Box<dyn gpu::GpuProvider>>,
+    disk: Option<disk::DiskSampler>,
+}
+
+impl Collector {
+    fn new() -> (Self, SystemInfo) {
+        let system = system::SystemSampler::new();
+        let cores = topology::physical_cores(system.logical_count());
+        let cpu_sensors = cpu_sensors::CpuSensors::new(system.base_mhz(), &cores);
+        let gpu_provider = gpu::detect_provider();
+
+        let info = SystemInfo {
+            cpu_model: system.cpu_model(),
+            gpu_model: gpu_provider.as_ref().map(|p| p.name().to_owned()),
+            cpu_sensor_source: cpu_sensors.source().as_str(),
+            physical_cores: cores.len(),
+            ram_speed: memory::ram_speed_label(),
+        };
+        let collector = Self {
+            system,
+            cores,
+            cpu_sensors,
+            gpu_provider,
+            disk: disk::DiskSampler::new(),
+        };
+        (collector, info)
+    }
+
+    fn sample(&mut self, fps_tracker: &FpsTracker) -> Metrics {
+        let sys = self.system.sample();
+        let sensors = self.cpu_sensors.sample(&self.cores);
+        let fps = fps_tracker.reading();
+        let display = display::primary_display_mode();
+        let disk_sample = self.disk.as_mut().map(|d| d.sample());
+
+        let core_metrics = self
+            .cores
+            .iter()
+            .enumerate()
+            .map(|(index, core)| CoreMetrics {
+                index,
+                usage: core
+                    .logical
+                    .iter()
+                    .filter_map(|&i| sys.logical_usage.get(i))
+                    .sum::<f32>()
+                    / core.logical.len() as f32,
+                clock_mhz: sensors.core_clocks_mhz.get(index).copied().flatten(),
+            })
+            .collect();
+
+        Metrics {
+            fps: fps.as_ref().map(|r| r.fps),
+            frame_time_ms: fps.as_ref().map(|r| r.frame_time_ms).filter(|ms| *ms > 0.0),
+            gpu_busy_ms: fps.as_ref().and_then(|r| r.gpu_busy_ms),
+            display_latency_ms: fps.as_ref().and_then(|r| r.display_latency_ms),
+            bound: fps.as_ref().and_then(|r| r.bound),
+            fps_process: fps.map(|r| r.application),
+            fps_capturing: fps_tracker.is_capturing(),
+            cpu_usage: sys.cpu_usage,
+            cpu_clock_mhz: sensors.average_clock_mhz.unwrap_or(sys.cpu_clock_mhz),
+            cpu_temp_c: sensors.temp_c,
+            cpu_power_w: sensors.power_w,
+            cores: core_metrics,
+            ccd_temps_c: sensors.ccd_temps_c,
+            ram_used_bytes: sys.ram_used_bytes,
+            ram_total_bytes: sys.ram_total_bytes,
+            disk_read_bps: disk_sample.as_ref().and_then(|d| d.read_bps),
+            disk_write_bps: disk_sample.as_ref().and_then(|d| d.write_bps),
+            gpu: self.gpu_provider.as_mut().and_then(|p| p.sample()),
+            screen_width: display.as_ref().map_or(0, |d| d.width),
+            screen_height: display.as_ref().map_or(0, |d| d.height),
+            refresh_hz: display.as_ref().map_or(0, |d| d.refresh_hz),
+        }
+    }
+}
+
 /// Samples every metric source on one background thread and pushes a `metrics` event to the overlay.
 pub fn spawn_collector(app: AppHandle, fps_tracker: Arc<FpsTracker>) {
     let _ = thread::Builder::new()
         .name("metrics".into())
         .spawn(move || {
-            let mut system = system::SystemSampler::new();
-            let cores = topology::physical_cores(system.logical_count());
-            let mut cpu_sensors = cpu_sensors::CpuSensors::new(system.base_mhz(), &cores);
-            let mut gpu_provider = gpu::detect_provider();
-            let mut disk = disk::DiskSampler::new();
-
-            let info = SystemInfo {
-                cpu_model: system.cpu_model(),
-                gpu_model: gpu_provider.as_ref().map(|p| p.name().to_owned()),
-                cpu_sensor_source: cpu_sensors.source().as_str(),
-                physical_cores: cores.len(),
-                ram_speed: memory::ram_speed_label(),
-            };
+            let (mut collector, info) = Collector::new();
             *app.state::<SystemInfoState>().0.lock().unwrap() = Some(info.clone());
             let _ = app.emit("system-info", &info);
 
@@ -108,53 +178,23 @@ pub fn spawn_collector(app: AppHandle, fps_tracker: Arc<FpsTracker>) {
                     continue;
                 }
 
-                let sys = system.sample();
-                let sensors = cpu_sensors.sample(&cores);
-                let fps = fps_tracker.reading();
-                let display = display::primary_display_mode();
-                let disk_sample = disk.as_mut().map(|d| d.sample());
-
-                let core_metrics = cores
-                    .iter()
-                    .enumerate()
-                    .map(|(index, core)| CoreMetrics {
-                        index,
-                        usage: core
-                            .logical
-                            .iter()
-                            .filter_map(|&i| sys.logical_usage.get(i))
-                            .sum::<f32>()
-                            / core.logical.len() as f32,
-                        clock_mhz: sensors.core_clocks_mhz.get(index).copied().flatten(),
-                    })
-                    .collect();
-
-                let metrics = Metrics {
-                    fps: fps.as_ref().map(|r| r.fps),
-                    frame_time_ms: fps.as_ref().map(|r| r.frame_time_ms).filter(|ms| *ms > 0.0),
-                    gpu_busy_ms: fps.as_ref().and_then(|r| r.gpu_busy_ms),
-                    display_latency_ms: fps.as_ref().and_then(|r| r.display_latency_ms),
-                    bound: fps.as_ref().and_then(|r| r.bound),
-                    fps_process: fps.map(|r| r.application),
-                    fps_capturing: fps_tracker.is_capturing(),
-                    cpu_usage: sys.cpu_usage,
-                    cpu_clock_mhz: sensors.average_clock_mhz.unwrap_or(sys.cpu_clock_mhz),
-                    cpu_temp_c: sensors.temp_c,
-                    cpu_power_w: sensors.power_w,
-                    cores: core_metrics,
-                    ccd_temps_c: sensors.ccd_temps_c,
-                    ram_used_bytes: sys.ram_used_bytes,
-                    ram_total_bytes: sys.ram_total_bytes,
-                    disk_read_bps: disk_sample.as_ref().and_then(|d| d.read_bps),
-                    disk_write_bps: disk_sample.as_ref().and_then(|d| d.write_bps),
-                    gpu: gpu_provider.as_mut().and_then(|p| p.sample()),
-                    screen_width: display.as_ref().map_or(0, |d| d.width),
-                    screen_height: display.as_ref().map_or(0, |d| d.height),
-                    refresh_hz: display.as_ref().map_or(0, |d| d.refresh_hz),
-                };
-
+                let metrics = collector.sample(&fps_tracker);
                 let _ = app.emit_to(OVERLAY_LABEL, "metrics", &metrics);
                 thread::sleep(SAMPLE_INTERVAL);
             }
         });
+}
+
+/// Headless diagnostics: prints `samples` metric snapshots (one second apart) as JSON lines,
+/// without windows or PresentMon, so sensors can be checked over SSH.
+pub fn dump(samples: u32) {
+    let (mut collector, info) = Collector::new();
+    let fps_tracker = FpsTracker::default();
+    let gpu = collector.gpu_provider.as_ref().map(|p| p.diagnostics());
+    println!("{}", serde_json::json!({ "systemInfo": info, "gpuProvider": gpu }));
+    for _ in 0..samples {
+        thread::sleep(Duration::from_secs(1));
+        let metrics = collector.sample(&fps_tracker);
+        println!("{}", serde_json::json!({ "metrics": metrics }));
+    }
 }

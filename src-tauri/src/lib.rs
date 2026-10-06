@@ -115,6 +115,13 @@ fn shortcut_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(position) = args.iter().position(|a| a == "--dump-metrics") {
+        let samples = args.get(position + 1).and_then(|n| n.parse().ok()).unwrap_or(5);
+        metrics::dump(samples);
+        return;
+    }
+
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_shell::init())
