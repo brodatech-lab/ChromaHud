@@ -105,7 +105,7 @@ fn per_adapter(counter: PDH_HCOUNTER) -> HashMap<String, f64> {
         if PdhGetFormattedCounterArrayW(counter, PDH_FMT_DOUBLE, &mut size, &mut count, None) != PDH_MORE_DATA {
             return totals;
         }
-        let items = (size as usize).div_ceil(size_of::<PDH_FMT_COUNTERVALUE_ITEM_W>());
+        let items = (size as usize).div_ceil(std::mem::size_of::<PDH_FMT_COUNTERVALUE_ITEM_W>());
         let mut buffer = vec![PDH_FMT_COUNTERVALUE_ITEM_W::default(); items];
         if PdhGetFormattedCounterArrayW(counter, PDH_FMT_DOUBLE, &mut size, &mut count, Some(buffer.as_mut_ptr()))
             != ERROR_SUCCESS
