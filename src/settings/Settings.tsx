@@ -228,7 +228,13 @@ export default function Settings() {
   return (
     <div className="flex min-h-full flex-col gap-3 p-4" style={{ accentColor: accent }}>
       <header className="flex items-center gap-3">
-        <FpsSplash fps={144} primaryColor={settings.primaryColor} secondaryColor={settings.secondaryColor} size={56} />
+        <FpsSplash
+          fps={144}
+          primaryColor={settings.primaryColor}
+          secondaryColor={settings.secondaryColor}
+          fontFamily={settings.fontFamily}
+          size={56}
+        />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between">
             <h1 className="font-comic text-2xl tracking-wider" style={{ color: accent }}>

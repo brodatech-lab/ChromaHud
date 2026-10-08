@@ -5,7 +5,14 @@ interface FpsSplashProps {
   process?: string | null;
   primaryColor: string;
   secondaryColor: string;
+  /** Face chosen in Look > Text. */
+  fontFamily: string;
   size?: number;
+}
+
+/** CSS font stack for the HUD face, including names that contain spaces. */
+export function hudFontFamily(family: string): string {
+  return `"${family}", system-ui, sans-serif`;
 }
 
 const VIEW = 200;
@@ -46,7 +53,7 @@ export function shortProcessName(process: string): string {
 }
 
 /** Comic-book "POW!" style starburst holding the FPS value. Pure inline SVG, no images. */
-function FpsSplash({ fps, process, primaryColor, secondaryColor, size = 150 }: FpsSplashProps) {
+function FpsSplash({ fps, process, primaryColor, secondaryColor, fontFamily, size = 150 }: FpsSplashProps) {
   const id = useId().replace(/:/g, "");
   const accent = fpsAccent(fps, primaryColor);
   const value = fps == null ? "N/A" : Math.round(fps).toString();
@@ -71,7 +78,7 @@ function FpsSplash({ fps, process, primaryColor, secondaryColor, size = 150 }: F
         x={CENTER}
         y={CENTER + 14}
         textAnchor="middle"
-        fontFamily="Bangers, Impact, sans-serif"
+        fontFamily={hudFontFamily(fontFamily)}
         fontSize={valueSize}
         fill="#fff"
         stroke="#000"
@@ -90,7 +97,7 @@ function FpsSplash({ fps, process, primaryColor, secondaryColor, size = 150 }: F
           x={CENTER}
           y={CENTER + 41}
           textAnchor="middle"
-          fontFamily="Bangers, Impact, sans-serif"
+          fontFamily={hudFontFamily(fontFamily)}
           fontSize="20"
           letterSpacing="3"
           fill={secondaryColor}
@@ -104,7 +111,7 @@ function FpsSplash({ fps, process, primaryColor, secondaryColor, size = 150 }: F
           x={CENTER}
           y={VIEW + 14}
           textAnchor="middle"
-          fontFamily="Inter, system-ui, sans-serif"
+          fontFamily={hudFontFamily(fontFamily)}
           fontSize="13"
           fill="#fff"
           stroke="#000"

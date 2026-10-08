@@ -223,6 +223,7 @@ export default function Overlay() {
                   process={fpsLabel}
                   primaryColor={settings.primaryColor}
                   secondaryColor={settings.secondaryColor}
+                  fontFamily={settings.fontFamily}
                   size={settings.fpsSplashSize}
                 />
               </div>
@@ -238,6 +239,7 @@ export default function Overlay() {
                 process={fpsLabel}
                 primaryColor={settings.primaryColor}
                 secondaryColor={settings.secondaryColor}
+                fontFamily={settings.fontFamily}
                 size={settings.fpsBigSize}
               />
             ),

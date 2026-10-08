@@ -23,7 +23,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - **Wrap to next row** (Look > Size): in the horizontal layout, blocks that would cross 10 px
   from the screen edge move onto the next row instead of staying in one line.
 - HUD fonts in Look > Text: Rajdhani, Oswald, Chakra Petch, Orbitron, and Share Tech Mono,
-  alongside Inter, JetBrains Mono, and Bangers.
+  alongside Inter, JetBrains Mono, and Bangers. The same face is used for the FPS splash
+  and big-text styles, including the process name.
 
 ### Changed
 

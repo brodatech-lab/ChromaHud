@@ -1,11 +1,13 @@
 import { memo, type CSSProperties } from "react";
-import { fpsAccent, shortProcessName } from "./FpsSplash";
+import { fpsAccent, hudFontFamily, shortProcessName } from "./FpsSplash";
 
 interface FpsBigTextProps {
   fps: number | null;
   process?: string | null;
   primaryColor: string;
   secondaryColor: string;
+  /** Face chosen in Look > Text. */
+  fontFamily: string;
   /** Font size of the number, in px. */
   size: number;
 }
@@ -22,14 +24,14 @@ function comicText(color: string, size: number): CSSProperties {
   };
 }
 
-/** Large FPS number in the same Bangers comic style as the splash, without the starburst. */
-function FpsBigText({ fps, process, primaryColor, secondaryColor, size }: FpsBigTextProps) {
+/** Large FPS number in the splash lettering style, without the starburst. */
+function FpsBigText({ fps, process, primaryColor, secondaryColor, fontFamily, size }: FpsBigTextProps) {
   const value = fps == null ? "N/A" : Math.round(fps).toString();
   const labelSize = size * 0.32;
 
   return (
     <div className="flex flex-col items-center" style={{ transform: "rotate(-4deg)" }}>
-      <div className="flex items-end gap-[0.15em] leading-none" style={{ fontFamily: "Bangers, Impact, sans-serif" }}>
+      <div className="flex items-end gap-[0.15em] leading-none" style={{ fontFamily: hudFontFamily(fontFamily) }}>
         <span className="tracking-[0.04em]" style={{ fontSize: size, ...comicText(fpsAccent(fps, primaryColor), size) }}>
           {value}
         </span>
@@ -43,7 +45,7 @@ function FpsBigText({ fps, process, primaryColor, secondaryColor, size }: FpsBig
       {process && (
         <span
           className="mt-1 text-[13px] text-white"
-          style={{ fontFamily: "Inter, system-ui, sans-serif", WebkitTextStroke: "3px #000", paintOrder: "stroke fill" }}
+          style={{ fontFamily: hudFontFamily(fontFamily), WebkitTextStroke: "3px #000", paintOrder: "stroke fill" }}
         >
           {shortProcessName(process)}
         </span>
