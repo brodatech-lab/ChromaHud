@@ -3,8 +3,17 @@ import BlockOrderList from "./BlockOrderList";
 import FpsSplash from "../overlay/FpsSplash";
 import { useHudSettings } from "../hooks/useHudSettings";
 import { useSystemInfo } from "../hooks/useSystemInfo";
-import { DEFAULT_SETTINGS } from "../lib/settings";
-import type { FpsProcessSource, FpsStyle, HudBlock, HudFont, HudSettings, OverlayLayout, SystemInfo } from "../types";
+import { DEFAULT_GPU_SLOT, DEFAULT_SETTINGS, gpuSlotAt } from "../lib/settings";
+import type {
+  FpsProcessSource,
+  FpsStyle,
+  GpuSlotSettings,
+  HudBlock,
+  HudFont,
+  HudSettings,
+  OverlayLayout,
+  SystemInfo,
+} from "../types";
 
 type Tab = "look" | "layout" | "sensors";
 
@@ -14,7 +23,17 @@ const TABS: { value: Tab; label: string }[] = [
   { value: "sensors", label: "Sensors" },
 ];
 
-const FONTS: HudFont[] = ["Inter", "JetBrains Mono", "Bangers", "system-ui"];
+const FONTS: HudFont[] = [
+  "Inter",
+  "Rajdhani",
+  "Oswald",
+  "Chakra Petch",
+  "Orbitron",
+  "JetBrains Mono",
+  "Share Tech Mono",
+  "Bangers",
+  "system-ui",
+];
 
 const POSITION_PRESETS: { label: string; posX: number; posY: number }[] = [
   { label: "Top left", posX: 0, posY: 0 },
@@ -48,8 +67,10 @@ const BLOCK_LABELS: Record<HudBlock, string> = {
   fps: "FPS",
   latency: "Latency",
   cpu: "CPU",
-  gpu: "GPU",
-  vram: "VRAM",
+  gpu1: "GPU 1",
+  gpu2: "GPU 2",
+  vram1: "VRAM 1",
+  vram2: "VRAM 2",
   ram: "RAM",
   disk: "Disk",
   display: "Resolution",
@@ -83,29 +104,33 @@ const SENSOR_GROUPS: { title: string; toggles: ToggleDef[] }[] = [
     ],
   },
   {
-    title: "GPU",
+    title: "RAM",
     toggles: [
-      { key: "showGpu", label: "Usage row" },
-      { key: "showGpuClock", label: "Clock", parent: "showGpu" },
-      { key: "showGpuTemp", label: "Temperature", parent: "showGpu" },
-      { key: "showGpuPower", label: "Power", parent: "showGpu" },
-      { key: "showGpuGauge", label: "Temperature gauge" },
-      { key: "showGpuModel", label: "Model name" },
-      { key: "showGpuFan", label: "Fan" },
-      { key: "showGpuLimit", label: "Power limit / throttling" },
-      { key: "showVram", label: "VRAM" },
-      { key: "showGpuMemClock", label: "VRAM clock", parent: "showVram" },
+      { key: "showRam", label: "Usage row" },
+      { key: "showRamSpeed", label: "RAM speed", parent: "showRam" },
+      { key: "showRamManufacturer", label: "Manufacturer" },
     ],
   },
   {
     title: "Other",
     toggles: [
-      { key: "showRam", label: "RAM" },
-      { key: "showRamSpeed", label: "RAM speed", parent: "showRam" },
       { key: "showDisk", label: "Disk" },
       { key: "showDisplay", label: "Resolution" },
     ],
   },
+];
+
+const GPU_SLOT_TOGGLES: { key: keyof GpuSlotSettings; label: string; parent?: keyof GpuSlotSettings }[] = [
+  { key: "showUsage", label: "Usage row" },
+  { key: "showClock", label: "Clock", parent: "showUsage" },
+  { key: "showTemp", label: "Temperature", parent: "showUsage" },
+  { key: "showPower", label: "Power", parent: "showUsage" },
+  { key: "showGauge", label: "Temperature gauge" },
+  { key: "showModel", label: "Model name" },
+  { key: "showFan", label: "Fan" },
+  { key: "showLimit", label: "Power limit / throttling" },
+  { key: "showVram", label: "VRAM" },
+  { key: "showMemClock", label: "VRAM clock", parent: "showVram" },
 ];
 
 const SENSOR_SOURCE_TEXT: Record<SystemInfo["cpuSensorSource"], string> = {
@@ -113,8 +138,12 @@ const SENSOR_SOURCE_TEXT: Record<SystemInfo["cpuSensorSource"], string> = {
   acpi: "CPU sensors: limited. Install PawnIO for temperature, power and per-core clocks: winget install namazso.PawnIO",
 };
 
-/** Whether a block renders anything with the current sensor toggles. */
-function isBlockEnabled(settings: HudSettings, block: HudBlock): boolean {
+function gpuBlockEnabled(slot: GpuSlotSettings): boolean {
+  return slot.enabled && (slot.showUsage || slot.showModel || slot.showGauge || slot.showFan || slot.showLimit);
+}
+
+/** Whether a block renders anything with the current sensor toggles and detected GPU count. */
+function isBlockEnabled(settings: HudSettings, block: HudBlock, gpuCount: number): boolean {
   switch (block) {
     case "fps":
       return true;
@@ -122,12 +151,16 @@ function isBlockEnabled(settings: HudSettings, block: HudBlock): boolean {
       return settings.showLatency;
     case "cpu":
       return settings.showCpu || settings.showCpuModel || settings.showCpuGauge || settings.showCpuCores;
-    case "gpu":
-      return settings.showGpu || settings.showGpuModel || settings.showGpuGauge || settings.showGpuFan || settings.showGpuLimit;
-    case "vram":
-      return settings.showVram;
+    case "gpu1":
+      return gpuBlockEnabled(gpuSlotAt(settings, 0));
+    case "gpu2":
+      return gpuCount > 1 && gpuBlockEnabled(gpuSlotAt(settings, 1));
+    case "vram1":
+      return gpuSlotAt(settings, 0).enabled && gpuSlotAt(settings, 0).showVram;
+    case "vram2":
+      return gpuCount > 1 && gpuSlotAt(settings, 1).enabled && gpuSlotAt(settings, 1).showVram;
     case "ram":
-      return settings.showRam;
+      return settings.showRam || settings.showRamManufacturer;
     case "disk":
       return settings.showDisk;
     case "display":
@@ -189,6 +222,8 @@ export default function Settings() {
   const systemInfo = useSystemInfo();
   const [tab, setTab] = useState<Tab>("look");
   const accent = settings.primaryColor;
+  const gpuCount = Math.max(1, systemInfo?.gpus.length ?? settings.gpuSlots.length);
+  const gpuGroups = gpuCount > 1 ? Array.from({ length: gpuCount }, (_, i) => `GPU ${i + 1}`) : ["GPU"];
 
   return (
     <div className="flex min-h-full flex-col gap-3 p-4" style={{ accentColor: accent }}>
@@ -225,6 +260,12 @@ export default function Settings() {
               <Field label="Secondary" value={settings.secondaryColor}>
                 <ColorInput value={settings.secondaryColor} onChange={(secondaryColor) => update({ secondaryColor })} />
               </Field>
+              <Field label="Model names" value={settings.modelColor}>
+                <ColorInput value={settings.modelColor} onChange={(modelColor) => update({ modelColor })} />
+              </Field>
+              <Field label="Values" value={settings.valueColor}>
+                <ColorInput value={settings.valueColor} onChange={(valueColor) => update({ valueColor })} />
+              </Field>
               <Field label="Panel background" value={settings.panelColor}>
                 <ColorInput value={settings.panelColor} onChange={(panelColor) => update({ panelColor })} />
               </Field>
@@ -237,25 +278,37 @@ export default function Settings() {
             </Field>
           </Section>
 
+          <Section title="Size">
+            <Field label="Size" value={`${settings.fontSize}px`}>
+              <Slider value={settings.fontSize} min={11} max={32} step={1} onChange={(fontSize) => update({ fontSize })} />
+            </Field>
+            <label className="flex items-center gap-2 text-sm text-white/80">
+              <input
+                type="checkbox"
+                checked={settings.horizontalWrap}
+                onChange={(e) => update({ horizontalWrap: e.target.checked })}
+              />
+              Wrap to next row
+            </label>
+            <p className="-mt-1 text-[11px] text-white/40">
+              Horizontal layout: blocks that would cross 10 px from the screen edge move to the next row.
+            </p>
+          </Section>
+
           <Section title="Text">
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Font">
-                <select
-                  className="rounded-md border border-white/10 bg-[#161922] px-2 py-1.5 text-sm"
-                  value={settings.fontFamily}
-                  onChange={(e) => update({ fontFamily: e.target.value as HudFont })}
-                >
-                  {FONTS.map((font) => (
-                    <option key={font} value={font} style={{ fontFamily: font }}>
-                      {font}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Size" value={`${settings.fontSize}px`}>
-                <Slider value={settings.fontSize} min={11} max={24} step={1} onChange={(fontSize) => update({ fontSize })} />
-              </Field>
-            </div>
+            <Field label="Font">
+              <select
+                className="rounded-md border border-white/10 bg-[#161922] px-2 py-1.5 text-sm"
+                value={settings.fontFamily}
+                onChange={(e) => update({ fontFamily: e.target.value as HudFont })}
+              >
+                {FONTS.map((font) => (
+                  <option key={font} value={font} style={{ fontFamily: font }}>
+                    {font}
+                  </option>
+                ))}
+              </select>
+            </Field>
           </Section>
         </>
       )}
@@ -289,7 +342,8 @@ export default function Settings() {
             {settings.overlayLayout === "horizontal" && (
               <>
                 <p className="-mt-1 text-[11px] text-white/40">
-                  Blocks sit in one row. The per-core CPU panel is hidden in this layout.
+                  The per-core CPU panel is hidden in this layout. The HUD stays 10 px from the screen
+                  edges.
                 </p>
                 <Field label="Gap between blocks" value={`${settings.blockGap}px`}>
                   <Slider
@@ -383,7 +437,7 @@ export default function Settings() {
             <BlockOrderList
               order={settings.blockOrder}
               labels={BLOCK_LABELS}
-              isEnabled={(block) => isBlockEnabled(settings, block)}
+              isEnabled={(block) => isBlockEnabled(settings, block, gpuCount)}
               accentColor={accent}
               onChange={(blockOrder) => update({ blockOrder })}
             />
@@ -420,6 +474,54 @@ export default function Settings() {
               )}
             </div>
           ))}
+          {gpuGroups.map((title, index) => {
+            const slot = gpuSlotAt(settings, index);
+            return (
+              <div key={title} className="flex flex-col gap-1.5">
+                <h3 className="text-xs font-semibold text-white/70">{title}</h3>
+                {systemInfo?.gpus[index] && (
+                  <p className="text-[11px] text-white/40">{systemInfo.gpus[index].name}</p>
+                )}
+                <label className="flex items-center gap-2 text-sm text-white/80">
+                  <input
+                    type="checkbox"
+                    checked={slot.enabled}
+                    onChange={(e) => {
+                      const slots = settings.gpuSlots.slice();
+                      while (slots.length <= index) slots.push({ ...DEFAULT_GPU_SLOT });
+                      slots[index] = { ...gpuSlotAt({ ...settings, gpuSlots: slots }, index), enabled: e.target.checked };
+                      update({ gpuSlots: slots });
+                    }}
+                  />
+                  Show
+                </label>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                  {GPU_SLOT_TOGGLES.map(({ key, label, parent }) => {
+                    const disabled = !slot.enabled || (parent != null && !slot[parent]);
+                    return (
+                      <label
+                        key={key}
+                        className={`flex items-center gap-2 text-sm ${disabled ? "text-white/30" : "text-white/80"} ${parent ? "pl-4" : ""}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={slot[key]}
+                          disabled={disabled}
+                          onChange={(e) => {
+                            const slots = settings.gpuSlots.slice();
+                            while (slots.length <= index) slots.push({ ...DEFAULT_GPU_SLOT });
+                            slots[index] = { ...gpuSlotAt({ ...settings, gpuSlots: slots }, index), [key]: e.target.checked };
+                            update({ gpuSlots: slots });
+                          }}
+                        />
+                        {label}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </Section>
       )}
     </div>

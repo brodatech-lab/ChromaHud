@@ -52,10 +52,18 @@ pub struct Metrics {
     pub ram_total_bytes: u64,
     pub disk_read_bps: Option<f64>,
     pub disk_write_bps: Option<f64>,
-    pub gpu: Option<GpuMetrics>,
+    pub gpus: Vec<GpuMetrics>,
     pub screen_width: u32,
     pub screen_height: u32,
     pub refresh_hz: u32,
+}
+
+/// One detected GPU, used by settings to build GPU 1 / GPU 2 groups.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GpuInfo {
+    pub name: String,
+    pub vendor: String,
 }
 
 /// Static hardware description, available once the collector thread has probed the sensors.
@@ -64,11 +72,14 @@ pub struct Metrics {
 pub struct SystemInfo {
     pub cpu_model: String,
     pub gpu_model: Option<String>,
+    pub gpus: Vec<GpuInfo>,
     /// "pawnio" | "acpi"
     pub cpu_sensor_source: &'static str,
     pub physical_cores: usize,
     /// e.g. "DDR5-6000"
     pub ram_speed: Option<String>,
+    /// SPD manufacturer (not the module part number).
+    pub ram_manufacturer: Option<String>,
 }
 
 #[derive(Default)]
@@ -84,7 +95,7 @@ struct Collector {
     system: system::SystemSampler,
     cores: Vec<topology::PhysicalCore>,
     cpu_sensors: cpu_sensors::CpuSensors,
-    gpu_provider: Option<Box<dyn gpu::GpuProvider>>,
+    gpu_providers: Vec<Box<dyn gpu::GpuProvider>>,
     disk: Option<disk::DiskSampler>,
 }
 
@@ -93,20 +104,30 @@ impl Collector {
         let system = system::SystemSampler::new();
         let cores = topology::physical_cores(system.logical_count());
         let cpu_sensors = cpu_sensors::CpuSensors::new(system.base_mhz(), &cores);
-        let gpu_provider = gpu::detect_provider();
+        let gpu_providers = gpu::detect_gpus();
+        let gpus: Vec<GpuInfo> = gpu_providers
+            .iter()
+            .map(|p| GpuInfo {
+                name: p.name().to_owned(),
+                vendor: p.vendor().to_owned(),
+            })
+            .collect();
 
+        let ram = memory::probe();
         let info = SystemInfo {
             cpu_model: system.cpu_model(),
-            gpu_model: gpu_provider.as_ref().map(|p| p.name().to_owned()),
+            gpu_model: gpus.first().map(|g| g.name.clone()),
+            gpus,
             cpu_sensor_source: cpu_sensors.source().as_str(),
             physical_cores: cores.len(),
-            ram_speed: memory::ram_speed_label(),
+            ram_speed: ram.speed,
+            ram_manufacturer: ram.manufacturer,
         };
         let collector = Self {
             system,
             cores,
             cpu_sensors,
-            gpu_provider,
+            gpu_providers,
             disk: disk::DiskSampler::new(),
         };
         (collector, info)
@@ -131,7 +152,12 @@ impl Collector {
                     .filter_map(|&i| sys.logical_usage.get(i))
                     .sum::<f32>()
                     / core.logical.len() as f32,
-                clock_mhz: sensors.core_clocks_mhz.get(index).copied().flatten(),
+                clock_mhz: sensors
+                    .core_clocks_mhz
+                    .get(index)
+                    .copied()
+                    .flatten()
+                    .or_else(|| average_logical_clock(&core.logical, &sys.logical_clock_mhz)),
             })
             .collect();
 
@@ -155,12 +181,32 @@ impl Collector {
             ram_total_bytes: sys.ram_total_bytes,
             disk_read_bps: disk_sample.as_ref().and_then(|d| d.read_bps),
             disk_write_bps: disk_sample.as_ref().and_then(|d| d.write_bps),
-            gpu: self.gpu_provider.as_mut().and_then(|p| p.sample()),
+            gpus: self
+                .gpu_providers
+                .iter_mut()
+                .enumerate()
+                .filter_map(|(index, provider)| {
+                    let mut metrics = provider.sample()?;
+                    metrics.index = index as u32;
+                    Some(metrics)
+                })
+                .collect(),
             screen_width: display.as_ref().map_or(0, |d| d.width),
             screen_height: display.as_ref().map_or(0, |d| d.height),
             refresh_hz: display.as_ref().map_or(0, |d| d.refresh_hz),
         }
     }
+}
+
+fn average_logical_clock(logical: &[usize], clocks: &[Option<u32>]) -> Option<u32> {
+    let values: Vec<u32> = logical
+        .iter()
+        .filter_map(|&i| clocks.get(i).copied().flatten())
+        .collect();
+    if values.is_empty() {
+        return None;
+    }
+    Some(values.iter().sum::<u32>() / values.len() as u32)
 }
 
 /// Samples every metric source on one background thread and pushes a `metrics` event to the overlay.
@@ -194,8 +240,8 @@ pub fn spawn_collector(app: AppHandle, fps_tracker: Arc<FpsTracker>) {
 pub fn dump(samples: u32) {
     let (mut collector, info) = Collector::new();
     let fps_tracker = FpsTracker::default();
-    let gpu = collector.gpu_provider.as_ref().map(|p| p.diagnostics());
-    println!("{}", serde_json::json!({ "systemInfo": info, "gpuProvider": gpu }));
+    let gpus: Vec<serde_json::Value> = collector.gpu_providers.iter().map(|p| p.diagnostics()).collect();
+    println!("{}", serde_json::json!({ "systemInfo": info, "gpuProviders": gpus }));
     for _ in 0..samples {
         thread::sleep(Duration::from_secs(1));
         let metrics = collector.sample(&fps_tracker);

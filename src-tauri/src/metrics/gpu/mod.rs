@@ -7,6 +7,7 @@ use serde::Serialize;
 #[derive(Serialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GpuMetrics {
+    pub index: u32,
     pub vendor: &'static str,
     pub name: String,
     pub usage: Option<u32>,
@@ -27,6 +28,7 @@ pub struct GpuMetrics {
 /// A vendor-specific source of GPU telemetry.
 pub trait GpuProvider {
     fn name(&self) -> &str;
+    fn vendor(&self) -> &'static str;
     fn sample(&mut self) -> Option<GpuMetrics>;
     /// Extra detail for `--dump-metrics`.
     fn diagnostics(&self) -> serde_json::Value {
@@ -55,11 +57,21 @@ impl<P: GpuProvider> GpuProvider for WithPdhFallback<P> {
         self.inner.name()
     }
 
+    fn vendor(&self) -> &'static str {
+        self.inner.vendor()
+    }
+
     fn sample(&mut self) -> Option<GpuMetrics> {
         let mut metrics = self.inner.sample()?;
         let prefer_counters = self.inner.prefers_counter_usage();
         if prefer_counters || metrics.usage.is_none() || metrics.vram_used_bytes.is_none() {
-            if let Some(sample) = self.pdh.as_mut().map(|p| p.sample()) {
+            if let Some(sample) = self.pdh.as_mut().map(|p| {
+                if prefer_counters {
+                    p.sample_integrated()
+                } else {
+                    p.sample()
+                }
+            }) {
                 metrics.usage = if prefer_counters {
                     sample.usage.or(metrics.usage)
                 } else {
@@ -76,16 +88,18 @@ impl<P: GpuProvider> GpuProvider for WithPdhFallback<P> {
     }
 }
 
-/// Picks the first vendor library that loads on this machine, then the vendor-neutral counters.
-pub fn detect_provider() -> Option<Box<dyn GpuProvider>> {
-    if let Some(provider) = nvidia::NvidiaProvider::new() {
-        return Some(Box::new(provider));
+/// Every vendor GPU, then Windows-counter adapters whose names are not already covered.
+pub fn detect_gpus() -> Vec<Box<dyn GpuProvider>> {
+    let mut providers: Vec<Box<dyn GpuProvider>> = Vec::new();
+    for nvidia in nvidia::NvidiaProvider::all() {
+        providers.push(Box::new(nvidia));
     }
-    if let Some(provider) = amd::AmdProvider::new() {
-        return Some(Box::new(WithPdhFallback::new(provider)));
+    for amd in amd::AmdProvider::all() {
+        providers.push(Box::new(WithPdhFallback::new(amd)));
     }
-    if let Some(provider) = pdh::PdhProvider::new() {
-        return Some(Box::new(provider));
+    let covered: Vec<String> = providers.iter().map(|p| p.name().to_owned()).collect();
+    for leftover in pdh::PdhProvider::leftover(&covered) {
+        providers.push(Box::new(leftover));
     }
-    None
+    providers
 }

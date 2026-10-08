@@ -21,11 +21,15 @@ export default function StatRow({ label, value, detail, detailAccent, percent }:
         >
           {label}
         </span>
-        <span className="font-semibold tabular-nums text-white">{value}</span>
+        <span className="font-semibold tabular-nums" style={{ color: "var(--hud-value)" }}>
+          {value}
+        </span>
         {detail && (
           <span
-            className={`text-[0.8em] tabular-nums ${detailAccent ? "font-semibold" : "text-white/60"}`}
-            style={detailAccent ? { color: "var(--hud-secondary)" } : undefined}
+            className={`text-[0.8em] tabular-nums ${detailAccent ? "font-semibold" : ""}`}
+            style={{
+              color: detailAccent ? "var(--hud-secondary)" : "color-mix(in srgb, var(--hud-value) 60%, transparent)",
+            }}
           >
             {detail}
           </span>

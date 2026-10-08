@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use adlx::{ffi, AdlxHelper, Gpu, GpuMetricsSupport, PerformanceMonitoringServices};
 use serde::Serialize;
 
@@ -35,45 +37,72 @@ impl Support {
     }
 }
 
+/// Shared ADLX session. GPU handles must be dropped before this (field order on [`AmdProvider`]).
+struct AmdShared {
+    services: PerformanceMonitoringServices,
+    _helper: AdlxHelper,
+}
+
 /// AMD Radeon telemetry through ADLX (amdadlx64.dll ships with the Adrenalin driver).
 pub struct AmdProvider {
-    // Declaration order is drop order: ADLX interfaces must be released before the helper terminates ADLX.
-    services: PerformanceMonitoringServices,
+    // GPU handle first so it drops before the shared ADLX session.
     gpu: Gpu,
     support: Support,
     name: String,
     integrated: bool,
     total_vram_bytes: Option<u64>,
-    _helper: AdlxHelper,
+    shared: Arc<AmdShared>,
 }
 
 impl AmdProvider {
-    pub fn new() -> Option<Self> {
-        let helper = AdlxHelper::new().ok()?;
-        let gpus: Vec<Gpu> = helper.system().gpus().ok()?.iter().collect();
-        let is_discrete = |gpu: &Gpu| gpu.type_().ok() == Some(ffi::ADLX_GPU_TYPE_GPUTYPE_DISCRETE);
-        let index = gpus.iter().position(is_discrete).unwrap_or(0);
-        let gpu = gpus.into_iter().nth(index)?;
+    /// One provider per ADLX GPU, including the integrated part next to a discrete card.
+    pub fn all() -> Vec<Self> {
+        let Ok(helper) = AdlxHelper::new() else {
+            return Vec::new();
+        };
+        let Ok(list) = helper.system().gpus() else {
+            return Vec::new();
+        };
+        let Ok(services) = helper.system().performance_monitoring_services() else {
+            return Vec::new();
+        };
 
-        let services = helper.system().performance_monitoring_services().ok()?;
-        let support = Support::query(&services.supported_gpu_metrics(&gpu).ok()?);
-        let name = gpu.name().ok()?.trim().to_owned();
-        let integrated = gpu.type_().ok() == Some(ffi::ADLX_GPU_TYPE_GPUTYPE_INTEGRATED);
-        let total_vram_bytes = gpu
-            .total_vram()
-            .ok()
-            .filter(|mb| *mb > 0)
-            .map(|mb| u64::from(mb) * 1024 * 1024);
+        // Walk the list before moving `helper` into the Arc. Relocating the helper first
+        // leaves ADLX GPU list pointers dangling (access violation on this machine).
+        let mut parts = Vec::new();
+        for gpu in list.iter() {
+            let Ok(metrics_support) = services.supported_gpu_metrics(&gpu) else {
+                continue;
+            };
+            let Ok(name) = gpu.name() else {
+                continue;
+            };
+            let name = name.trim().to_owned();
+            if name.is_empty() {
+                continue;
+            }
+            let integrated = gpu.type_().ok() == Some(ffi::ADLX_GPU_TYPE_GPUTYPE_INTEGRATED);
+            let total_vram_bytes = gpu
+                .total_vram()
+                .ok()
+                .filter(|mb| *mb > 0)
+                .map(|mb| u64::from(mb) * 1024 * 1024);
+            parts.push((gpu, Support::query(&metrics_support), name, integrated, total_vram_bytes));
+        }
+        drop(list);
 
-        Some(Self {
-            services,
-            gpu,
-            support,
-            name,
-            integrated,
-            total_vram_bytes,
-            _helper: helper,
-        })
+        let shared = Arc::new(AmdShared { services, _helper: helper });
+        parts
+            .into_iter()
+            .map(|(gpu, support, name, integrated, total_vram_bytes)| Self {
+                gpu,
+                support,
+                name,
+                integrated,
+                total_vram_bytes,
+                shared: shared.clone(),
+            })
+            .collect()
     }
 }
 
@@ -86,8 +115,12 @@ impl GpuProvider for AmdProvider {
         &self.name
     }
 
+    fn vendor(&self) -> &'static str {
+        "AMD"
+    }
+
     fn sample(&mut self) -> Option<GpuMetrics> {
-        let m = self.services.current_gpu_metrics(&self.gpu).ok()?;
+        let m = self.shared.services.current_gpu_metrics(&self.gpu).ok()?;
         let s = self.support;
 
         let temp_c = read(s.temperature, m.temperature())

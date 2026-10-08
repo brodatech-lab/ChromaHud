@@ -17,10 +17,10 @@ Built with Tauri v2 (Rust) + React + Vite + TypeScript + Tailwind CSS v4.
 | AMD Radeon GPU (Adrenalin driver) | Usage, core / VRAM clock, temperature, power, VRAM usage, fan RPM (ADLX). No P-state, power limit or throttle reason; integrated Radeon GPUs report no fan |
 | Intel Arc / other GPUs | Basic: usage and memory from the Windows GPU counters (the same data as Task Manager) |
 | AMD Ryzen CPU (Zen 2 - Zen 5) | Full with the PawnIO driver: temperature, CCD temperatures, package power, per-core clocks |
-| Intel CPU | Partial: total and per-core usage, model, base clock. Temperature only if the motherboard exposes an ACPI thermal zone; no package power or per-core clocks |
+| Intel CPU | Full with the PawnIO driver (`IntelMSR`): package temperature, RAPL package power, per-core clocks. Without PawnIO: usage, model, effective clocks (package and per-core via Windows counters); temperature only if the board exposes an ACPI thermal zone |
 | RAM, disk, display | Any hardware |
 
-FPS and latency work on every GPU (PresentMon is vendor-neutral). Full Intel CPU support is planned.
+FPS and latency work on every GPU (PresentMon is vendor-neutral).
 
 ## Download and install
 
@@ -42,7 +42,7 @@ Open PowerShell (no administrator needed) and paste:
 irm https://github.com/brodatech-lab/ChromaHud/releases/latest/download/install.ps1 | iex
 ```
 
-To also install the PawnIO driver for AMD CPU temperature, power and per-core clocks:
+To also install the PawnIO driver for AMD / Intel CPU temperature, power and per-core clocks:
 
 ```powershell
 & ([scriptblock]::Create((irm https://github.com/brodatech-lab/ChromaHud/releases/latest/download/install.ps1))) -WithPawnIO
@@ -61,7 +61,7 @@ Keep `presentmon.exe` in the same folder.
 - ChromaHUD asks for **administrator rights** every time it starts. Without them there is no FPS and no CPU sensor data.
 - It lives in the system tray (bottom-right, next to the clock). Click the icon to open the settings.
 - `Ctrl+Shift+H` shows / hides the overlay, `Ctrl+Shift+O` opens settings, `Ctrl+Shift+C` toggles per-core CPU details.
-- AMD CPU temperature and power need the free PawnIO driver: `winget install namazso.PawnIO` (or Option B with `-WithPawnIO`).
+- AMD and Intel CPU temperature and power need the free PawnIO driver: `winget install namazso.PawnIO` (or Option B with `-WithPawnIO`).
 - Uninstall: **Settings > Apps > Installed apps > ChromaHUD > Uninstall**.
 
 ## Screenshots
@@ -82,15 +82,16 @@ Keep `presentmon.exe` in the same folder.
 - FPS of the foreground app in three styles: comic starburst splash, big comic lettering, or a plain table row.
 - Game pause menus show as "paused" instead of the desktop; optionally keep tracking the game after Alt+Tab.
 - Show the exe name or the game name under FPS, or hide the label.
-- Horizontal overlay layout with a gap slider, and GPU / VRAM as separate reorderable blocks.
+- Horizontal overlay layout with a gap slider, 10 px screen-edge margin, and optional wrap to the next row. GPU 1 / GPU 2 / VRAM 1 / VRAM 2 are separate reorderable blocks.
 - Display latency, GPU busy time and a CPU-bound / GPU-bound verdict.
 - CPU: usage, effective clock, temperature (Tctl), package power, model name, per-core usage and clocks, CCD temperatures.
+- Multiple GPUs as GPU 1 / GPU 2 (and VRAM 1 / VRAM 2) in the overlay and Sensors.
 - GPU (NVIDIA): usage, core / VRAM clock, temperature, power, VRAM usage, fan % and RPM, P-state, power limit and throttle reason.
 - GPU (AMD Radeon): usage, core / VRAM clock, temperature, power, VRAM usage and fan RPM.
-- RAM usage and speed (e.g. DDR5-6000), disk throughput, screen resolution and refresh rate.
+- RAM usage, speed (e.g. DDR5-6000) and manufacturer, disk throughput, screen resolution and refresh rate.
 - Color-changing temperature gauges for CPU and GPU.
-- Settings window: colors, panel background and opacity, font and size, position sliders and presets,
-  drag-and-drop block order, and a toggle for every single value.
+- Settings window: colors (including model names and values), panel background and opacity, HUD size, font,
+  position sliders and presets, drag-and-drop block order, and a toggle for every single value.
 
 ## Metrics sources
 
@@ -99,8 +100,9 @@ Keep `presentmon.exe` in the same folder.
 | FPS, frame time, GPU busy, display latency | PresentMon console sidecar (ETW), needs admin |
 | CPU usage, per-core usage, model | sysinfo |
 | CPU temperature (Tctl), CCD temperatures, package power, per-core clocks (AMD Zen) | PawnIO driver + signed `AMDFamily17` module, needs admin |
-| CPU clock / temperature fallback | PDH `% Processor Performance` + WMI `MSAcpi_ThermalZoneTemperature` (not exposed on every board) |
-| RAM usage / speed | sysinfo / WMI `Win32_PhysicalMemory` |
+| CPU temperature (DTS), RAPL package power, per-core clocks (Intel) | PawnIO driver + signed `IntelMSR` module, needs admin |
+| CPU clock / temperature fallback | PDH `% Processor Performance` (package and per-core) + WMI `MSAcpi_ThermalZoneTemperature` (not exposed on every board) |
+| RAM usage / speed / manufacturer | sysinfo / WMI `Win32_PhysicalMemory` |
 | Disk throughput | PDH `PhysicalDisk(_Total)` counters |
 | GPU (NVIDIA) | NVML (`nvml.dll` from the driver) |
 | GPU (AMD Radeon) | ADLX (`amdadlx64.dll` from the Adrenalin driver) |
@@ -113,7 +115,7 @@ Keep `presentmon.exe` in the same folder.
 
 - Windows 10/11 x64
 - Node.js 20+ and the Rust toolchain (MSVC)
-- Optional: [PawnIO](https://pawnio.eu/) driver for AMD CPU temperature, power and per-core clocks
+- Optional: [PawnIO](https://pawnio.eu/) driver for AMD / Intel CPU temperature, power and per-core clocks
 
 ### Third-party binaries
 
@@ -123,6 +125,7 @@ Two files are not stored in the repository and must be downloaded before buildin
 | --- | --- | --- |
 | PresentMon console app | x64 console build from [PresentMon v2.6.0](https://github.com/GameTechDev/PresentMon/releases/tag/v2.6.0) | `src-tauri/binaries/presentmon-x86_64-pc-windows-msvc.exe` |
 | PawnIO AMD module | `AMDFamily17.bin` from [`release_0_2_11.zip`](https://github.com/namazso/PawnIO.Modules/releases/tag/0.2.11) | `src-tauri/resources/pawnio/AMDFamily17.bin` |
+| PawnIO Intel module | `IntelMSR.bin` from the same zip | `src-tauri/resources/pawnio/IntelMSR.bin` |
 
 PresentMon is bundled as a sidecar and the PawnIO module is embedded into the binary. Without the PawnIO
 driver installed the app still runs; CPU temperature, power and per-core clocks fall back to ACPI/PDH and

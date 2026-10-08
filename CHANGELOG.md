@@ -6,6 +6,32 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Multi-GPU overlay: every NVIDIA, AMD and leftover Windows-counter adapter is listed as GPU 1, GPU 2, …
+  (Sensors tab and HUD). VRAM follows the same numbering. A single GPU still uses the unnumbered labels.
+- Order lists GPU 1, GPU 2, VRAM 1 and VRAM 2 as separate blocks so each card can be placed independently.
+- Intel CPU sensors through PawnIO (`IntelMSR.bin`): package temperature (DTS), RAPL package power and
+  per-core clocks (APERF/MPERF). Without PawnIO, per-core clocks fall back to Windows `% Processor
+  Performance` counters.
+- RAM manufacturer from Windows (`Win32_PhysicalMemory`), shown as a caption; Sensors has a dedicated
+  RAM group with usage, speed and manufacturer toggles. Several kits are listed together (`G Skill Intl, Kingston`).
+- Per-GPU Show checkbox hides that card (and its VRAM) without clearing the other sensor toggles.
+  A single tracked GPU is labelled GPU / VRAM; two tracked cards stay GPU 1 / GPU 2.
+- Overlay text colors for model names and numeric values (Look > Colors). The font size slider
+  scales the stats panel evenly (labels, values, padding).
+- **Wrap to next row** (Look > Size): in the horizontal layout, blocks that would cross 10 px
+  from the screen edge move onto the next row instead of staying in one line.
+- HUD fonts in Look > Text: Rajdhani, Oswald, Chakra Petch, Orbitron, and Share Tech Mono,
+  alongside Inter, JetBrains Mono, and Bangers.
+
+### Changed
+
+- Look: Size is its own control (not under Text). It still scales the whole HUD.
+- The horizontal layout stays 10 px from the screen edges. Without wrap, further Size increases
+  stop once the HUD fills that area; with wrap, extra blocks go below until the same 10 px limit.
+- Horizontal fit no longer measures the same element it scales. The previous loop could freeze the desktop.
+
 ## [0.3.0] - 2026-10-06
 
 ### Added

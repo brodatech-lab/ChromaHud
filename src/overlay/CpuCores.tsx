@@ -23,7 +23,7 @@ export default function CpuCores({ cores, ccdTemps }: CpuCoresProps) {
               <span className="font-semibold" style={{ color: "var(--hud-secondary)" }}>
                 CCD{i + 1}
               </span>{" "}
-              <span className="text-white">{temp != null ? `${Math.round(temp)}°C` : "--"}</span>
+              <span style={{ color: "var(--hud-value)" }}>{temp != null ? `${Math.round(temp)}°C` : "--"}</span>
             </span>
           ))}
         </div>
@@ -38,8 +38,12 @@ export default function CpuCores({ cores, ccdTemps }: CpuCoresProps) {
               >
                 C{core.index}
               </span>
-              <span className="w-[2.6em] text-white">{Math.round(core.usage)}%</span>
-              <span className="text-white/60">{core.clockMhz != null ? `${(core.clockMhz / 1000).toFixed(2)} GHz` : "--"}</span>
+              <span className="w-[2.6em]" style={{ color: "var(--hud-value)" }}>
+                {Math.round(core.usage)}%
+              </span>
+              <span style={{ color: "color-mix(in srgb, var(--hud-value) 60%, transparent)" }}>
+                {core.clockMhz != null ? `${(core.clockMhz / 1000).toFixed(2)} GHz` : "--"}
+              </span>
             </div>
             <div className="h-[2px] overflow-hidden rounded-full bg-white/10">
               <div

@@ -1,11 +1,12 @@
 mod acpi;
 mod amd;
+mod intel;
 
 use super::topology::PhysicalCore;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum CpuSensorSource {
-    /// AMD Zen sensors through the PawnIO driver: temperature, package power, per-core clocks.
+    /// AMD Zen or Intel sensors through the PawnIO driver: temperature, package power, per-core clocks.
     PawnIo,
     /// ACPI thermal zone via WMI: temperature only, and only on some boards.
     Acpi,
@@ -34,20 +35,24 @@ pub struct CpuSensorReading {
 /// CPU temperature, power and clocks, preferring PawnIO and falling back to ACPI for temperature.
 pub enum CpuSensors {
     Amd(amd::AmdSensors),
+    Intel(intel::IntelSensors),
     Acpi(acpi::SharedTemperature),
 }
 
 impl CpuSensors {
     pub fn new(base_mhz: u64, cores: &[PhysicalCore]) -> Self {
-        match amd::AmdSensors::new(base_mhz, cores) {
-            Some(sensors) => Self::Amd(sensors),
-            None => Self::Acpi(acpi::spawn_reader()),
+        if let Some(sensors) = amd::AmdSensors::new(base_mhz, cores) {
+            return Self::Amd(sensors);
         }
+        if let Some(sensors) = intel::IntelSensors::new(base_mhz, cores) {
+            return Self::Intel(sensors);
+        }
+        Self::Acpi(acpi::spawn_reader())
     }
 
     pub fn source(&self) -> CpuSensorSource {
         match self {
-            Self::Amd(_) => CpuSensorSource::PawnIo,
+            Self::Amd(_) | Self::Intel(_) => CpuSensorSource::PawnIo,
             Self::Acpi(_) => CpuSensorSource::Acpi,
         }
     }
@@ -55,6 +60,7 @@ impl CpuSensors {
     pub fn sample(&mut self, cores: &[PhysicalCore]) -> CpuSensorReading {
         match self {
             Self::Amd(sensors) => sensors.sample(cores),
+            Self::Intel(sensors) => sensors.sample(cores),
             Self::Acpi(temperature) => CpuSensorReading {
                 temp_c: *temperature.lock().unwrap(),
                 ..Default::default()

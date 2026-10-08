@@ -9,13 +9,33 @@ struct PhysicalMemory {
     configured_clock_speed: Option<u32>,
     #[serde(rename = "SMBIOSMemoryType")]
     smbios_memory_type: Option<u32>,
+    manufacturer: Option<String>,
 }
 
-/// Memory type and configured data rate, e.g. "DDR5-6000". Read once at startup.
-pub fn ram_speed_label() -> Option<String> {
-    let connection = WMIConnection::new().ok()?;
-    let modules: Vec<PhysicalMemory> = connection.query().ok()?;
+pub struct RamInfo {
+    /// e.g. "DDR5-6000"
+    pub speed: Option<String>,
+    /// SPD manufacturer only — not the module SKU / part number.
+    pub manufacturer: Option<String>,
+}
 
+/// Memory type, configured data rate and manufacturer. Read once at startup.
+pub fn probe() -> RamInfo {
+    let Some(modules) = query() else {
+        return RamInfo { speed: None, manufacturer: None };
+    };
+    RamInfo {
+        speed: speed_label(&modules),
+        manufacturer: manufacturer_label(&modules),
+    }
+}
+
+fn query() -> Option<Vec<PhysicalMemory>> {
+    let connection = WMIConnection::new().ok()?;
+    connection.query().ok()
+}
+
+fn speed_label(modules: &[PhysicalMemory]) -> Option<String> {
     let speed = modules
         .iter()
         .filter_map(|m| m.configured_clock_speed)
@@ -30,6 +50,45 @@ pub fn ram_speed_label() -> Option<String> {
         Some(kind) => format!("{kind}-{speed}"),
         None => format!("{speed} MT/s"),
     })
+}
+
+fn manufacturer_label(modules: &[PhysicalMemory]) -> Option<String> {
+    let mut names: Vec<String> = Vec::new();
+    for module in modules {
+        let Some(name) = module.manufacturer.as_deref().and_then(clean_manufacturer) else {
+            continue;
+        };
+        if !names.iter().any(|existing| existing.eq_ignore_ascii_case(&name)) {
+            names.push(name);
+        }
+    }
+    match names.len() {
+        0 => None,
+        1 => names.pop(),
+        _ => Some(names.join(", ")),
+    }
+}
+
+fn clean_manufacturer(raw: &str) -> Option<String> {
+    let name = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+    if name.is_empty() {
+        return None;
+    }
+    let lower = name.to_ascii_lowercase();
+    let placeholder = matches!(
+        lower.as_str(),
+        "unknown"
+            | "undefined"
+            | "none"
+            | "null"
+            | "oem"
+            | "to be filled by o.e.m."
+            | "to be filled by oem"
+    );
+    if placeholder || name.bytes().all(|b| b == b'0') {
+        return None;
+    }
+    Some(name)
 }
 
 /// SMBIOS type 17 "Memory Type" codes.

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use nvml_wrapper::bitmasks::device::ThrottleReasons;
 use nvml_wrapper::enum_wrappers::device::{Clock, PerformanceState, TemperatureSensor};
 use nvml_wrapper::Nvml;
@@ -6,15 +8,27 @@ use super::{GpuMetrics, GpuProvider};
 
 /// NVIDIA telemetry through NVML (nvml.dll ships with the display driver, no elevation needed).
 pub struct NvidiaProvider {
-    nvml: Nvml,
+    nvml: Arc<Nvml>,
+    index: u32,
     name: String,
 }
 
 impl NvidiaProvider {
-    pub fn new() -> Option<Self> {
-        let nvml = Nvml::init().ok()?;
-        let name = nvml.device_by_index(0).ok()?.name().ok()?;
-        Some(Self { nvml, name })
+    /// One provider per NVML device, sharing a single library handle.
+    pub fn all() -> Vec<Self> {
+        let Ok(nvml) = Nvml::init() else {
+            return Vec::new();
+        };
+        let Ok(count) = nvml.device_count() else {
+            return Vec::new();
+        };
+        let nvml = Arc::new(nvml);
+        (0..count)
+            .filter_map(|index| {
+                let name = nvml.device_by_index(index).ok()?.name().ok()?;
+                Some(Self { nvml: nvml.clone(), index, name })
+            })
+            .collect()
     }
 }
 
@@ -23,9 +37,13 @@ impl GpuProvider for NvidiaProvider {
         &self.name
     }
 
+    fn vendor(&self) -> &'static str {
+        "NVIDIA"
+    }
+
     fn sample(&mut self) -> Option<GpuMetrics> {
         // `Device` borrows `Nvml`, so the handle is looked up per sample (a cheap driver call).
-        let device = self.nvml.device_by_index(0).ok()?;
+        let device = self.nvml.device_by_index(self.index).ok()?;
         let memory = device.memory_info().ok();
 
         Some(GpuMetrics {
@@ -43,7 +61,12 @@ impl GpuProvider for NvidiaProvider {
             fan_rpm: device.fan_speed_rpm(0).ok().filter(|rpm| *rpm > 0),
             throttle_reason: device.current_throttle_reasons().ok().and_then(throttle_label),
             pstate: device.performance_state().ok().and_then(pstate_number),
+            ..Default::default()
         })
+    }
+
+    fn diagnostics(&self) -> serde_json::Value {
+        serde_json::json!({ "provider": "nvml", "index": self.index, "name": self.name })
     }
 }
 

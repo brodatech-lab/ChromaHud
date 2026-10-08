@@ -50,35 +50,46 @@ impl PdhGpu {
     }
 
     pub fn sample(&mut self) -> PdhSample {
-        let empty = PdhSample { usage: None, vram_used_bytes: None };
-        if unsafe { PdhCollectQueryData(self.query) } != ERROR_SUCCESS {
-            return empty;
-        }
+        self.sample_all()
+            .into_iter()
+            .max_by_key(|s| s.vram_used_bytes.unwrap_or(0))
+            .unwrap_or(PdhSample { usage: None, vram_used_bytes: None })
+    }
 
+    /// One sample per adapter LUID. Software adapters usually hold almost no memory.
+    pub fn sample_all(&mut self) -> Vec<PdhSample> {
+        if unsafe { PdhCollectQueryData(self.query) } != ERROR_SUCCESS {
+            return Vec::new();
+        }
         let dedicated = per_adapter(self.dedicated);
         let shared = per_adapter(self.shared);
-        // The adapter holding the most memory is the one rendering; software adapters hold almost none.
-        let Some(luid) = dedicated
-            .keys()
-            .chain(shared.keys())
-            .max_by_key(|luid| {
-                let total = dedicated.get(*luid).unwrap_or(&0.0) + shared.get(*luid).unwrap_or(&0.0);
-                total as u64
+        let usage = per_adapter(self.engine);
+        let mut luids: Vec<String> = dedicated.keys().chain(shared.keys()).cloned().collect();
+        luids.sort();
+        luids.dedup();
+        luids
+            .into_iter()
+            .map(|luid| {
+                let local = dedicated.get(&luid).copied().unwrap_or(0.0);
+                let memory = if local >= 64.0 * 1024.0 * 1024.0 {
+                    local
+                } else {
+                    local + shared.get(&luid).copied().unwrap_or(0.0)
+                };
+                PdhSample {
+                    usage: usage.get(&luid).map(|u| u.round().clamp(0.0, 100.0) as u32),
+                    vram_used_bytes: (memory > 0.0).then_some(memory as u64),
+                }
             })
-            .cloned()
-        else {
-            return empty;
-        };
+            .collect()
+    }
 
-        let usage = per_adapter(self.engine).get(&luid).map(|u| u.round().clamp(0.0, 100.0) as u32);
-        // Integrated GPUs keep almost everything in shared system memory.
-        let local = dedicated.get(&luid).copied().unwrap_or(0.0);
-        let memory = if local >= 64.0 * 1024.0 * 1024.0 { local } else { local + shared.get(&luid).copied().unwrap_or(0.0) };
-
-        PdhSample {
-            usage,
-            vram_used_bytes: (memory > 0.0).then_some(memory as u64),
-        }
+    /// Integrated GPUs sit in shared memory; pick the adapter with the least dedicated usage.
+    pub fn sample_integrated(&mut self) -> PdhSample {
+        self.sample_all()
+            .into_iter()
+            .min_by_key(|s| s.vram_used_bytes.unwrap_or(0))
+            .unwrap_or(PdhSample { usage: None, vram_used_bytes: None })
     }
 }
 
@@ -147,25 +158,42 @@ pub struct PdhProvider {
 }
 
 impl PdhProvider {
-    pub fn new() -> Option<Self> {
-        let pdh = PdhGpu::new()?;
-        let controllers: Vec<VideoController> = WMIConnection::new().ok()?.query().ok()?;
-        let name = controllers
+    pub fn leftover(covered_names: &[String]) -> Vec<Self> {
+        let controllers: Vec<VideoController> = WMIConnection::new()
+            .ok()
+            .and_then(|wmi| wmi.query().ok())
+            .unwrap_or_default();
+        controllers
             .into_iter()
             .filter_map(|c| c.name)
-            .find(|name| !name.starts_with("Microsoft"))?;
-        let lower = name.to_lowercase();
-        let vendor = if lower.contains("intel") {
-            "Intel"
-        } else if lower.contains("amd") || lower.contains("radeon") {
-            "AMD"
-        } else if lower.contains("nvidia") {
-            "NVIDIA"
-        } else {
-            "GPU"
-        };
-        Some(Self { pdh, name, vendor })
+            .filter(|name| !name.starts_with("Microsoft"))
+            .filter(|name| !covered_names.iter().any(|covered| names_overlap(covered, name)))
+            .filter_map(|name| {
+                let pdh = PdhGpu::new()?;
+                let vendor = vendor_from_name(&name);
+                Some(Self { pdh, name, vendor })
+            })
+            .collect()
     }
+}
+
+fn vendor_from_name(name: &str) -> &'static str {
+    let lower = name.to_lowercase();
+    if lower.contains("intel") {
+        "Intel"
+    } else if lower.contains("amd") || lower.contains("radeon") {
+        "AMD"
+    } else if lower.contains("nvidia") {
+        "NVIDIA"
+    } else {
+        "GPU"
+    }
+}
+
+fn names_overlap(a: &str, b: &str) -> bool {
+    let a = a.to_lowercase();
+    let b = b.to_lowercase();
+    a.contains(&b) || b.contains(&a)
 }
 
 impl GpuProvider for PdhProvider {
@@ -173,8 +201,16 @@ impl GpuProvider for PdhProvider {
         &self.name
     }
 
+    fn vendor(&self) -> &'static str {
+        self.vendor
+    }
+
     fn sample(&mut self) -> Option<GpuMetrics> {
-        let sample = self.pdh.sample();
+        let sample = if self.vendor == "Intel" {
+            self.pdh.sample_integrated()
+        } else {
+            self.pdh.sample()
+        };
         Some(GpuMetrics {
             vendor: self.vendor,
             name: self.name.clone(),
