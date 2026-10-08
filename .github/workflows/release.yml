@@ -46,10 +46,13 @@ jobs:
           $dir = Join-Path $env:RUNNER_TEMP "pawnio-modules"
           Invoke-WebRequest -Uri "https://github.com/namazso/PawnIO.Modules/releases/download/$tag/release_$($tag -replace '\.', '_').zip" -OutFile $zip
           Expand-Archive -Path $zip -DestinationPath $dir -Force
-          $module = Get-ChildItem -Path $dir -Recurse -Filter AMDFamily17.bin | Select-Object -First 1
-          if (-not $module) { throw "AMDFamily17.bin not found in PawnIO.Modules $tag" }
+          $amd = Get-ChildItem -Path $dir -Recurse -Filter AMDFamily17.bin | Select-Object -First 1
+          $intel = Get-ChildItem -Path $dir -Recurse -Filter IntelMSR.bin | Select-Object -First 1
+          if (-not $amd) { throw "AMDFamily17.bin not found in PawnIO.Modules $tag" }
+          if (-not $intel) { throw "IntelMSR.bin not found in PawnIO.Modules $tag" }
           New-Item -ItemType Directory -Force src-tauri/resources/pawnio | Out-Null
-          Copy-Item $module.FullName src-tauri/resources/pawnio/AMDFamily17.bin
+          Copy-Item $amd.FullName src-tauri/resources/pawnio/AMDFamily17.bin
+          Copy-Item $intel.FullName src-tauri/resources/pawnio/IntelMSR.bin
 
       - run: npm ci
 

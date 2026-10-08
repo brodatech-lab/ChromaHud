@@ -6,6 +6,8 @@ and the project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-08
+
 ### Added
 
 - Multi-GPU overlay: every NVIDIA, AMD and leftover Windows-counter adapter is listed as GPU 1, GPU 2, …
@@ -31,7 +33,7 @@ and the project follows [Semantic Versioning](https://semver.org/).
 - Look: Size is its own control (not under Text). It still scales the whole HUD.
 - The horizontal layout stays 10 px from the screen edges. Without wrap, further Size increases
   stop once the HUD fills that area; with wrap, extra blocks go below until the same 10 px limit.
-- Horizontal fit no longer measures the same element it scales. The previous loop could freeze the desktop.
+- Fixed a horizontal-layout hang that could freeze the desktop while fitting the HUD to the screen.
 
 ## [0.3.0] - 2026-10-06
 
@@ -103,7 +105,8 @@ the new per-machine installer does not replace it.
 - Settings window with Look / Layout / Sensors tabs, drag-and-drop block order and panel color / opacity.
 - Windows release pipeline: NSIS installer, portable zip and a one-command PowerShell installer.
 
-[Unreleased]: https://github.com/brodatech-lab/ChromaHud/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/brodatech-lab/ChromaHud/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/brodatech-lab/ChromaHud/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/brodatech-lab/ChromaHud/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/brodatech-lab/ChromaHud/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/brodatech-lab/ChromaHud/compare/v0.1.0...v0.1.1

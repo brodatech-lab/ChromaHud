@@ -82,16 +82,15 @@ Keep `presentmon.exe` in the same folder.
 - FPS of the foreground app in three styles: comic starburst splash, big comic lettering, or a plain table row.
 - Game pause menus show as "paused" instead of the desktop; optionally keep tracking the game after Alt+Tab.
 - Show the exe name or the game name under FPS, or hide the label.
-- Horizontal overlay layout with a gap slider, 10 px screen-edge margin, and optional wrap to the next row. GPU 1 / GPU 2 / VRAM 1 / VRAM 2 are separate reorderable blocks.
+- Horizontal overlay layout with a gap slider and a 10 px screen-edge margin. Wrap to next row (Look > Size) moves blocks that would cross that margin onto the next row; without it, Size stops growing once the row fills the screen.
 - Display latency, GPU busy time and a CPU-bound / GPU-bound verdict.
-- CPU: usage, effective clock, temperature (Tctl), package power, model name, per-core usage and clocks, CCD temperatures.
-- Multiple GPUs as GPU 1 / GPU 2 (and VRAM 1 / VRAM 2) in the overlay and Sensors.
+- CPU: usage, effective clock, temperature, package power, model name, per-core usage and clocks. AMD also reports CCD temperatures (Tctl). Intel package temperature and RAPL power need PawnIO.
+- Multiple GPUs as GPU 1 / GPU 2 (and VRAM 1 / VRAM 2), each a separate reorderable block. A Show switch hides one card and its VRAM without clearing the other sensor toggles. One tracked GPU stays labelled GPU / VRAM.
 - GPU (NVIDIA): usage, core / VRAM clock, temperature, power, VRAM usage, fan % and RPM, P-state, power limit and throttle reason.
 - GPU (AMD Radeon): usage, core / VRAM clock, temperature, power, VRAM usage and fan RPM.
 - RAM usage, speed (e.g. DDR5-6000) and manufacturer, disk throughput, screen resolution and refresh rate.
 - Color-changing temperature gauges for CPU and GPU.
-- Settings window: colors (including model names and values), panel background and opacity, HUD size, font,
-  position sliders and presets, drag-and-drop block order, and a toggle for every single value.
+- Settings window: colors for the HUD, model names and values, panel background and opacity, and a Size slider that scales the whole HUD. Fonts are Inter, Rajdhani, Oswald, Chakra Petch, Orbitron, JetBrains Mono, Share Tech Mono and Bangers; the same face is used by the stats, the FPS splash and the big-text style. Position sliders and presets, drag-and-drop block order, and a toggle for every single value.
 
 ## Metrics sources
 
